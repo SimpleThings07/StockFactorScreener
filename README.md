@@ -104,7 +104,7 @@ This software is for informational purposes only and does not constitute investm
 
 License
 
-Copyright © 2025 Ivan Antunovic. All rights reserved. See LICENSE for details.
+Copyright © 2025 Ivan Antunović. All rights reserved. See LICENSE for details.
 
 Contributing
 
