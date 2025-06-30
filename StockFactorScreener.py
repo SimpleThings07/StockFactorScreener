@@ -40,7 +40,8 @@ import yfinance as yf                # CHANGELOG: https://github.com/ranaroussi/
 from QualityMetrics import ProfitabilityMetrics, GrowthMetrics, SafetyMetrics
 from ValueMetrics import (
     ValueMetrics,
-    calc_ebit_to_tev
+    calc_ebit_to_tev,
+    get_market_cap
 
 )
 from Stock import Stock
@@ -73,7 +74,7 @@ class __ProgramInfo__:
     minorVersion : str = "5"
     
     # PATCH: Incremented when backward compatible bug fixes are made. No new features are added. Some call this micro.
-    patchVersion : str = "0"
+    patchVersion : str = "1"
     
     # Build Date of the Application - Date Format: YYMMDD
     buildDate = datetime (
@@ -157,8 +158,9 @@ def load_config(config_file='ScreenerConfig.json'):
         with open(config_file, 'r') as f:
             config = json.load(f)
         return config
-    except Exception as e:
-        logging.error(f"Error loading config file: {e}")
+    except Exception as ex:
+        logging.error(f"Error loading config file!")
+        logging.exception(ex)
         return None
 
 
@@ -346,7 +348,8 @@ def fetch_earnings_alpha_vantage(api_key, base_url, ticker, data_type="eps", ear
             return None
     
     except Exception as e:
-        print(f"Exception occurred: {e}")
+        logging.error(f"Error fetching earnings data from 'Alpha Vantage' for {ticker}!")
+        logging.exception(f"Exception occurred: {e}")
         return None
 
 
@@ -444,7 +447,8 @@ def get_income_statement_alpha_vantage(api_key, base_url, ticker, income_stateme
                 return None
 
     except Exception as e:
-        logging.error(f"Error fetching Income Statement data from 'Alpha Vantage' (Ticker: {ticker}): {e}")
+        logging.error(f"Error fetching Income Statement data from 'Alpha Vantage' (Ticker: {ticker})!")
+        logging.exception(f"Exception occurred: {e}")
         return None
 
 
@@ -539,7 +543,8 @@ def get_balance_sheet_alpha_vantage(api_key, base_url, ticker, balance_sheet_per
                 return None
 
     except Exception as e:
-        logging.error(f"Error fetching Balance Sheet data from 'Alpha Vantage' (Ticker: {ticker}): {e}")
+        logging.error(f"Error fetching Balance Sheet data from 'Alpha Vantage' (Ticker: {ticker})!")
+        logging.exception(f"Exception occurred: {e}")
         return None
 
 
@@ -616,7 +621,8 @@ def fetch_historical_net_income (stock):
 
 
     except Exception as e:
-        logging.error(f"Error fetching historical Net Income for {stock.ticker}: {e}")
+        logging.error(f"Error fetching historical Net Income for {stock.ticker}!")
+        logging.exception(f"Exception occurred: {e}")
         return None, None
 
 
@@ -847,7 +853,8 @@ def get_earnings (stock, ticker, earnings_type, earnings_period_req, av_api_key,
                 return None
 
     except Exception as e:
-        logging.error(f"Error fetching Earnings for {ticker}: {e}")
+        logging.error(f"Error fetching Earnings for {ticker}!")
+        logging.exception(f"Exception occurred: {e}")
         return None
 
 
@@ -909,7 +916,8 @@ def calc_earnings_growth (ticker, earnings_list):
         return o_earnings_growths
 
     except Exception as e:
-        logging.error(f"Error calculating Earnings Growth for {ticker}: {e}")
+        logging.error(f"Error calculating Earnings Growth for {ticker}!")
+        logging.exception(f"Exception occurred: {e}")
         return None
 
 
@@ -991,7 +999,8 @@ def calc_evar(ticker, earnings_growths_yoy):
         return evar_frac
     
     except Exception as e:
-        logging.error(f"Error calculating EVAR for {ticker}: {e}")
+        logging.error(f"Error calculating EVAR for {ticker}!")
+        logging.exception(f"Exception occurred: {e}")
         return None
 
 
@@ -1104,7 +1113,8 @@ def calc_cagr(ticker, earnings):
         return None
 
     except Exception as e:
-        logging.error(f"Error calculating CAGR (Ticker: {ticker}): {e}")
+        logging.error(f"Error calculating CAGR (Ticker: {ticker})!")
+        logging.exception(f"Exception occurred: {e}")
         return None
 
 
@@ -1270,7 +1280,8 @@ def calc_quarterly_bvps(stock, ticker):
         return o_bvps
 
     except Exception as e:
-        logging.error(f"Error calculating quarterly BVPS for {ticker}: {e}")
+        logging.error(f"Error calculating quarterly BVPS for {ticker}!")
+        logging.exception(f"Exception occurred: {e}")
         return None
 
 
@@ -1374,10 +1385,12 @@ def calc_roa(stock, ticker, config, years=4):
         return o_roa_calc_list
 
     except KeyError as e:
-        logging.error(f"KeyError: Missing expected data field in Yahoo Finance for Ticker {ticker}. Error: {e}")
+        logging.error(f"KeyError: Missing expected data field in Yahoo Finance for Ticker {ticker}.")
+        logging.exception(f"Exception occurred: {e}")
         return None
     except Exception as e:
-        logging.error(f"Unexpected error during ROE calculation for Ticker {ticker}: {e}")
+        logging.error(f"Unexpected error during ROE calculation for Ticker {ticker}!")
+        logging.exception(f"Exception occurred: {e}")
         return None
 
 
@@ -1435,7 +1448,8 @@ def calc_cfoa (stock, ticker):
         return cfoa_list
 
     except Exception as e:
-        logging.error(f"Error fetching CFOA data (Ticker: {ticker}): {e}")
+        logging.error(f"Error fetching CFOA data (Ticker: {ticker})!")
+        logging.exception(f"Exception occurred: {e}")
         return None
 
 
@@ -1591,7 +1605,8 @@ def calc_gross_profit_metrics(config, stock, ticker, data_period_req):
                 gpoa_list = None
 
             except Exception as e:
-                logging.error(f"Error fetching GPOA data (Ticker: {ticker}): {e}")
+                logging.error(f"Error fetching GPOA data (Ticker: {ticker})!")
+                logging.exception(f"Exception occurred: {e}")
                 gpoa_list = None
 
         # Skip GPOA calculation if Total Assets data is missing
@@ -1624,7 +1639,8 @@ def calc_gross_profit_metrics(config, stock, ticker, data_period_req):
                 gpoa_list = None
 
             except Exception as e:
-                logging.error(f"Error fetching GPMAR data (Ticker: {ticker}): {e}")
+                logging.error(f"Error fetching GPMAR data (Ticker: {ticker})!")
+                logging.exception(f"Exception occurred: {e}")
                 gpoa_list = None
 
         else:
@@ -1633,7 +1649,8 @@ def calc_gross_profit_metrics(config, stock, ticker, data_period_req):
         # -------------- 2.2 END of Calculate GPMAR --------------
 
     except Exception as e:
-        logging.error(f"Error calculating GPOA & GPMAR (Ticker {ticker}): {e}")
+        logging.error(f"Error calculating GPOA & GPMAR (Ticker {ticker})!")
+        logging.exception(f"Exception occurred: {e}")
         return None, None
 
 
@@ -1684,19 +1701,20 @@ def get_ebit_to_tev (stock, ticker):
         - float: EBIT/TEV ratio
     """
 
-    ebit_to_tev_ratio = None
+    ebit_to_tev_ratio, enterprise_value = None, None
 
     try:
 
-        ebit_to_tev_ratio, tev = calc_ebit_to_tev ( stock, ticker )
+        ebit_to_tev_ratio, enterprise_value = calc_ebit_to_tev ( stock, ticker )
 
     # Catch any general exceptions
     except Exception as ex:
 
-        logging.error(f"Error calculating EBIT/TEV ratio (Ticker: {ticker}): {ex}")
-        return None
+        logging.error(f"Unexpected exception occured while calculating EBIT/TEV ratio (Ticker: {ticker})!")
+        logging.exception(ex)
+        return None, None
 
-    return ebit_to_tev_ratio
+    return ebit_to_tev_ratio, enterprise_value
 
 
 
@@ -1847,12 +1865,20 @@ def analyze_stock (config, stock, ticker, weight):
 
         # -------------- EBIT/TEV Ratio --------------
 
-        ebit_to_tev = get_ebit_to_tev (stock, ticker)
+        ebit_to_tev, enterprise_value = get_ebit_to_tev (stock, ticker)
         ebit_to_tev_perc = round(ebit_to_tev * 100, 2) if ebit_to_tev is not None else None
         if ebit_to_tev_perc is not None:
             logging.info(f"EBIT/TEV (Ticker: {ticker}): {ebit_to_tev_perc} %")
         else:
             logging.info(f"EBIT/TEV (Ticker: {ticker}): N/A")
+
+
+            # Convert enterprise value to billions for consistency
+        enterprise_value_bill = None
+        if enterprise_value is not None:
+            enterprise_value_bill = enterprise_value / 1e9
+            # round up to 2 decimal places
+            enterprise_value_bill = round(enterprise_value_bill, 2)
 
         # -------------- P/B Ratio --------------
 
@@ -2116,7 +2142,7 @@ def analyze_stock (config, stock, ticker, weight):
 
         # -------------- Market Cap --------------
         # Convert Market Cap to billions
-        market_cap = stock.info.get("marketCap", None)
+        market_cap = get_market_cap(stock)
         market_cap_bill = market_cap / 1e9 if market_cap is not None else "N/A"  # Convert Market Cap to billions
 
 
@@ -2187,6 +2213,7 @@ def analyze_stock (config, stock, ticker, weight):
             "P/E (Forward)": '{:,.2f}'.format(forwardPE) if forwardPE is not None else "N/A",
             "P/E (Trailing)":  '{:,.2f}'.format(trailingPE) if trailingPE is not None else "N/A",
             "EBIT/TEV (%)": '{:,.2f}'.format(ebit_to_tev_perc) if ebit_to_tev_perc is not None else "N/A",
+            "TEV (in Billions)": '{:,.2f}'.format(enterprise_value_bill) if enterprise_value_bill is not None else "N/A",
             "EPS (latest)": '{:,.2f}'.format(eps_latest_rnd) if eps_latest_rnd is not None else "N/A",
             "P/B": '{:,.2f}'.format(pb_ratio_rnd) if pb_ratio_rnd is not None else "N/A",
             "EVAR - EPS (%)":"{}".format(evar_eps_perc),
@@ -2211,7 +2238,8 @@ def analyze_stock (config, stock, ticker, weight):
         return stock_data, stock_factor_metrics
 
     except Exception as e:
-        logging.exception("Unhandled error analyzing stock (Ticker: %s)", ticker)
+        logging.error("Unhandled error analyzing stock (Ticker: %s)", ticker)
+        logging.exception(e)
         return None, None
 
 
@@ -2222,27 +2250,43 @@ def analyze_one_stock (ticker_data):
     ticker = ticker_data["ticker"]
     weight = ticker_data["weight"]
 
-    # Fetch the stock data from Yahoo Finance
-    stock = yf.Ticker(ticker)
-    stock_info = stock.info
+    try:
 
-    if stock_info and 'symbol' in stock_info and is_valid_ticker(ticker):
+        # Fetch the stock data from Yahoo Finance
+        stock = yf.Ticker(ticker)
 
-        # If the ticker symbol is valid, analyze the stock
-        stock_data_entry, stock_factor_metrics = analyze_stock (
-            config,
-            stock,
-            ticker,
-            weight
-        )
+        # Get stock data
+        stock_info = stock.info
 
-        return ticker, stock_data_entry, stock_factor_metrics
+        # Check if the stock info is available and contains the 'symbol' key
+        # and if the ticker symbol is valid
+        if stock_info and 'symbol' in stock_info and is_valid_ticker(ticker):
 
-    else:
-        # If the ticker symbol is invalid, log the error and return an invalid entry
+            # If the ticker symbol is valid, analyze the stock
+            stock_data_entry, stock_factor_metrics = analyze_stock (
+                config,
+                stock,
+                ticker,
+                weight
+            )
+
+            return ticker, stock_data_entry, stock_factor_metrics
+
+        else:
+            # If the ticker symbol is invalid, log the error and return an invalid entry
+            # Log the error and return an invalid entry
+            logging.error(f"Invalid Stock Ticker Symbol: {ticker}")
+            logging.error(f"Skipping Stock Analysis for {ticker}.")
+            invalid_entry = INVALID_TICKER_TEMPLATE.copy()
+            invalid_entry["Company"] = ticker
+            invalid_entry["Original Weight"] = weight
+
+            return ticker, invalid_entry, None
+        
+    except Exception as e:
         # Log the error and return an invalid entry
-        logging.error(f"Invalid Stock Ticker Symbol: {ticker}")
-        logging.error(f"Skipping Stock Analysis for {ticker}.")
+        logging.error(f"Error analyzing stock (Ticker: {ticker})!")
+        logging.exception(e)
         invalid_entry = INVALID_TICKER_TEMPLATE.copy()
         invalid_entry["Company"] = ticker
         invalid_entry["Original Weight"] = weight
@@ -2358,4 +2402,5 @@ if __name__ == "__main__":
 
     except Exception as e:
         logging.critical("Unhandled ERROR running the Script occurred (Ticker: %s)!", current_ticker, exc_info=True)
+        logging.exception(f"Unhandled exception occurred while running the script: {e}")
         raise e

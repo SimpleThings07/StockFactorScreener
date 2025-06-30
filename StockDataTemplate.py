@@ -6,6 +6,7 @@ STOCK_DATA_TEMPLATE = {
     "P/E (Forward)": None,
     "P/E (Trailing)": None,
     "EBIT/TEV (%)": None,
+    "TEV (in Billions)": None,
     "EPS (latest)": None,
     "P/B": None,
     "EVAR - EPS (%)": None,

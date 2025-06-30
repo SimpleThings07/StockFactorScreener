@@ -127,36 +127,41 @@ def get_total_debt(balance_sheet):
 
 
 
-def get_market_cap(stock):
+def get_market_cap (stock):
     """
     Calculate the market capitalization.
 
     Market value of equity is the total dollar value of a company's equity and is also known as market capitalization. This measure of a company's value is calculated by multiplying the current stock price by the total number of outstanding shares.
     """
 
+    o_market_cap = None
+
     # Fetch the Market Cap data from the stock object (Yahoo Finance)
-    market_cap_direct = stock.info['marketCap']
+    market_cap_yf = stock.info['marketCap']
 
-    # Check if the market cap data is available
-    if market_cap_direct is None:
-        
-        # Throw exception if the data is not available
-        raise ValueError("Market Cap data is not available")
+    # Check if the market cap data is available and greater than zero
+    if market_cap_yf is not None and market_cap_yf > 0:
+
+        o_market_cap = market_cap_yf
     
-    # Calculated market cap
-    market_cap_calc = stock.info['currentPrice'] * stock.info['sharesOutstanding']
-    #market_cap_ratio = market_cap / market_cap_calc
+    else:
 
-    return market_cap_calc
+        # Calculated market cap
+        market_cap_calc = stock.info['currentPrice'] * stock.info['sharesOutstanding']
+
+        o_market_cap = market_cap_calc
+
+    return o_market_cap
 
 
 
-def get_enterprise_value(stock, ticker):
+def calc_enterprise_value(stock, ticker):
     """
-    Calculate the enterprise value (EV) of a company.
+    Calculates the enterprise value (EV) of a company.
     Enterprise value is a measure of a company's total value, often referred to as the theoretical takeover price if the company were to be bought. It is calculated as market capitalization plus total debt minus cash and cash equivalents.
+
     Formula:
-        EV = Market Cap + Total Debt - Cash and Cash Equivalents
+        EV = Market Cap + Total Debt - Cash and Cash Equivalents - Short Term Investments
 
     Parameters:
         - stock (yf.Ticker): A yfinance Ticker object representing the stock.
@@ -165,22 +170,44 @@ def get_enterprise_value(stock, ticker):
         - float: The enterprise value of the company.
     """
 
-    # Fetch the Enterprise Value data from the stock object (Yahoo Finance)
-    enterprise_value = stock.info['enterpriseValue']
+    # 1) Equity Value (Market Cap)
+    market_cap = get_market_cap (stock)
 
-    # check if the enterprise value data is available
-    if enterprise_value is None:
+    # 2) Balance Sheet items (choose most recent quarter)
+    balance_sheet = stock.quarterly_balance_sheet
 
-        # Throw exception if the data is not available
-        raise ValueError(f"Enterprise Value data is not available (Ticker: {ticker})")
+    # Check if the balance sheet data is available
+    if balance_sheet is None or balance_sheet.empty:
+        raise ValueError(f"No Balance Sheet data found (Ticker: {ticker}). Cannot calculate Enterprise Value!")
+
+    # the most-recent period
+    balance_sheet_latest = balance_sheet.columns[0]
+
+    # 3) Total Debt
+    total_debt = balance_sheet.loc["Total Debt", balance_sheet_latest]
+
+    # 4) Cash and Cash Equivalents
+    cash = balance_sheet.loc["Cash And Cash Equivalents", balance_sheet_latest]
+
+    # 5) Short Term Investments (if available)
+    short_term_investments = 0  # Initialize to 0 in case it is not found
+    try:
+        # Try to fetch "Other Short Term Investments" from the balance sheet
+        short_term_investments = balance_sheet.loc["Other Short Term Investments", balance_sheet_latest]
+    except KeyError:
+        # If "Other Short Term Investments" is not available, set it to 0
+        short_term_investments = 0
+
+    # 6) Calculate Enterprise Value from the fetched data
+    enterprise_value = market_cap + total_debt - cash - short_term_investments
 
     return enterprise_value
 
 
 
-def calc_ebit_to_tev(stock, ticker):
+def calc_ebit_to_tev (stock, ticker):
     """
-    Calculate EBIT (Earnings Before Interest and Taxes) to Total Enterprise Value (TEV) ratio.
+    Calculates EBIT (Earnings Before Interest and Taxes) to Total Enterprise Value (TEV) ratio.
 
     Formula:
         EBIT / TEV = EBIT (Operating Income) / (Market Cap + Total Debt - Cash and Cash Equivalents)
@@ -199,7 +226,7 @@ def calc_ebit_to_tev(stock, ticker):
     # ---------------- EBIT ----------------
 
     # Get operating income
-    operating_income_ttm = get_operating_income(stock, ticker, QUARTERS_CNT)
+    operating_income_ttm = get_operating_income (stock, ticker, QUARTERS_CNT)
 
     # Avoid division by zero
     if operating_income_ttm == 0:
@@ -208,7 +235,7 @@ def calc_ebit_to_tev(stock, ticker):
 
     # ---------------- TEV ----------------
 
-    total_enterprise_value = get_enterprise_value (stock, ticker)
+    total_enterprise_value = calc_enterprise_value (stock, ticker)
 
     # --------------- EBIT/TEV ---------------
 

@@ -1,6 +1,6 @@
 {
   
-    "Stock_Quality_Excel_Filename": "S&P_600_Quality_Value",
+    "Stock_Quality_Excel_Filename": "iShares_MSCI_World_Momentum_ETF",
   
     "__comment_Earnings_Growth_YoY_Source__": "options: 'internal_calculation' or 'yfinance'",
     "Earnings_Growth_YoY_Source": "internal_calculation", 
