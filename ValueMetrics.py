@@ -61,7 +61,7 @@ def get_operating_income (stock, ticker, quarters=4):
     income_statement = stock.quarterly_financials.T   # Transpose to have dates as rows
 
     # Check if the Income Statement data is available
-    if income_statement is None:
+    if income_statement is None or income_statement.empty:
         # Throw exception if the data is not available
         raise ValueError(f"No Income Statement data found (Ticker: {ticker}). Cannot calculate EBIT/TEV ratio!")
 
@@ -134,22 +134,41 @@ def get_market_cap (stock):
     Market value of equity is the total dollar value of a company's equity and is also known as market capitalization. This measure of a company's value is calculated by multiplying the current stock price by the total number of outstanding shares.
     """
 
+    # Function output
     o_market_cap = None
 
-    # Fetch the Market Cap data from the stock object (Yahoo Finance)
-    market_cap_yf = stock.info['marketCap']
+
+    market_cap_yf = None
+    try:
+
+        # Fetch the Market Cap data from the stock object (Yahoo Finance)
+        market_cap_yf = stock.info['marketCap']
+
+    except KeyError:
+        # If 'marketCap' is not available, set it to None
+        market_cap_yf = None
 
     # Check if the market cap data is available and greater than zero
     if market_cap_yf is not None and market_cap_yf > 0:
 
+        # Use the market cap from Yahoo Finance
         o_market_cap = market_cap_yf
-    
+
     else:
 
-        # Calculated market cap
-        market_cap_calc = stock.info['currentPrice'] * stock.info['sharesOutstanding']
+        market_cap_calc = 0
 
-        o_market_cap = market_cap_calc
+        try:
+
+            # Calculated market cap
+            market_cap_calc = stock.info['currentPrice'] * stock.info['sharesOutstanding']
+
+            # Use manually calculated market cap
+            o_market_cap = market_cap_calc
+
+        except KeyError:
+            # If 'currentPrice' or 'sharesOutstanding' is not available, set it to None
+            market_cap_calc = None
 
     return o_market_cap
 
@@ -183,19 +202,34 @@ def calc_enterprise_value(stock, ticker):
     # the most-recent period
     balance_sheet_latest = balance_sheet.columns[0]
 
-    # 3) Total Debt
-    total_debt = balance_sheet.loc["Total Debt", balance_sheet_latest]
 
-    # Check if total debt is NaN or None, and set it to 0 if so
-    if math.isnan(total_debt) or total_debt is None:
+    # 3) Total Debt
+    total_debt = 0 # Initialize to 0 in case it is not found
+    try:
+
+        total_debt = balance_sheet.loc["Total Debt", balance_sheet_latest]
+        # Check if total debt is NaN or None, and set it to 0 if so
+        if math.isnan(total_debt) or total_debt is None:
+            total_debt = 0
+
+    except KeyError:
+        # If "Total Debt" is not available, set it to 0
+        # This can happen if the company has no debt or the data is not available
         total_debt = 0
 
-    # 4) Cash and Cash Equivalents
-    cash = balance_sheet.loc["Cash And Cash Equivalents", balance_sheet_latest]
 
-    # Check if cash is NaN or None, and set it to 0 if so
-    if math.isnan(cash) or cash is None:
+    # 4) Cash and Cash Equivalents
+    cash = 0  # Initialize to 0 in case it is not found
+    try:
+        cash = balance_sheet.loc["Cash And Cash Equivalents", balance_sheet_latest]
+        # Check if cash is NaN or None, and set it to 0 if so
+        if math.isnan(cash) or cash is None:
+            cash = 0
+    except KeyError:
+        # If "Cash And Cash Equivalents" is not available, set it to 0
         cash = 0
+
+
 
     # 5) Short Term Investments (if available)
     short_term_investments = 0  # Initialize to 0 in case it is not found
@@ -210,6 +244,7 @@ def calc_enterprise_value(stock, ticker):
     except KeyError:
         # If "Other Short Term Investments" is not available, set it to 0
         short_term_investments = 0
+
 
     # 6) Calculate Enterprise Value from the fetched data
     enterprise_value = market_cap + total_debt - cash - short_term_investments
@@ -249,6 +284,9 @@ def calc_ebit_to_tev (stock, ticker):
     # ---------------- TEV ----------------
 
     total_enterprise_value = calc_enterprise_value (stock, ticker)
+
+    if total_enterprise_value == 0:
+        raise ValueError(f"Cannot calculate EBIT/TEV ratio (Ticker: {ticker}): Total Enterprise Value is zero.")
 
     # --------------- EBIT/TEV ---------------
 

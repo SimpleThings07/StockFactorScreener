@@ -74,7 +74,7 @@ class __ProgramInfo__:
     minorVersion : str = "5"
     
     # PATCH: Incremented when backward compatible bug fixes are made. No new features are added. Some call this micro.
-    patchVersion : str = "2"
+    patchVersion : str = "3"
     
     # Build Date of the Application - Date Format: YYMMDD
     buildDate = datetime (
@@ -1334,7 +1334,7 @@ def calc_roe_msci (stock, ticker):
 
 
 
-def calc_roa(stock, ticker, config, years=4):
+def calc_roa (stock, ticker, config, years=4):
     """
     Calculate ROA using Net Income and Total Assets from Yahoo Finance data.
 
@@ -1358,18 +1358,28 @@ def calc_roa(stock, ticker, config, years=4):
             config['AlphaVantage']['Base_URL'], 
         )
 
+        if not net_income_list:
+            logging.error(f"Cannot calculate ROA (Ticker: {ticker}): No Net Income data available.")
+            return None
+
 
         # -------------- 2. Get Shareholder's Equity from Balance Sheet --------------
 
         # Fetch Shareholders' Equity (or Stockholders' Equity) from the balance sheet (annual data)
         balance_sheet = stock.balance_sheet.T  # Transpose to have dates as rows
 
-        # Get "Stockholders' Equity" from the balance sheet data
-        total_assets_list = balance_sheet['Total Assets'][:years]
+        try:
+                
+            # Get "Stockholders' Equity" from the balance sheet data
+            total_assets_list = balance_sheet['Total Assets'][:years]
 
-        # If Total Assets is not available, log a warning and set ROA as None
-        if total_assets_list is None:
-            logging.error(f"Cannot calculate ROA (Ticker: {ticker}): Data for Total Assets is missing")
+            # If Total Assets is not available, log a warning and set ROA as None
+            if total_assets_list is None:
+                logging.error(f"Cannot calculate ROA (Ticker: {ticker}): Data for Total Assets is missing")
+                return None
+            
+        except KeyError:
+            logging.error(f"Cannot calculate ROA (Ticker: {ticker}): 'Total Assets' data is missing in the balance sheet.")
             return None
 
         # -------------- 3. Calculate ROE --------------
@@ -1414,28 +1424,48 @@ def calc_cfoa (stock, ticker):
 
     # Fetch the Cash Flow from Operating Activities (CFOA) data from Yahoo Finance
     try:
-        # Fetch the Cash Flow from Operating Activities (CFOA) data
-        cash_flow_operating = stock.cashflow.loc['Operating Cash Flow']
 
-        # Check if the CFOA data is available
-        if cash_flow_operating is None:
-            logging.error(f"No Cash Flow from Operating Activities data found (Ticker: {ticker}). Cannot calculate CFOA!")
+        # ---------------------- Cash Flow from Operating Activities ----------------------
+        cash_flow_operating = None
+        try:
+
+            # Fetch the Cash Flow from Operating Activities (CFOA) data
+            cash_flow_operating = stock.cashflow.loc['Operating Cash Flow']
+
+            # Check if the CFOA data is available
+            if cash_flow_operating is None:
+                logging.error(f"No Cash Flow from Operating Activities data found (Ticker: {ticker}). Cannot calculate CFOA!")
+                return None
+
+            # Convert the CFOA data to a list
+            cash_flow_operating = cash_flow_operating.tolist()
+
+        except KeyError:
+            logging.error(f"Cannot calculate CFOA! 'Operating Cash Flow' data is missing in the cash flow statement (Ticker: {ticker}).")
             return None
-        
-        # Convert the CFOA data to a list
-        cash_flow_operating = cash_flow_operating.tolist()
 
-        # Fetch the Total Assets data from the balance sheet
-        total_assets = stock.balance_sheet.loc['Total Assets']
 
-        # Check if the Total Assets data is available
-        if total_assets is None:
-            logging.error(f"No Total Assets data found (Ticker: {ticker}). Cannot calculate CFOA!")
+        # ---------------------- Total Assets ----------------------
+        total_assets = None
+        try:
+
+            # Fetch the Total Assets data from the balance sheet
+            total_assets = stock.balance_sheet.loc['Total Assets']
+
+            # Check if the Total Assets data is available
+            if total_assets is None:
+                logging.error(f"No Total Assets data found (Ticker: {ticker}). Cannot calculate CFOA!")
+                return None
+            
+            # Convert the Total Assets data to a list
+            total_assets = total_assets.tolist()
+
+        except KeyError:
+            logging.error(f"Cannot calculate CFOA! 'Total Assets' data is missing in the balance sheet (Ticker: {ticker}).")
             return None
-        
-        # Convert the Total Assets data to a list
-        total_assets = total_assets.tolist()
 
+
+        # ---------------------- Calculate CFOA  ----------------------
         # Get the CFOA data for the requested number of years if available
         for i in range(0, min ( len(cash_flow_operating), len(total_assets) ) ):
 
@@ -1448,7 +1478,7 @@ def calc_cfoa (stock, ticker):
         return cfoa_list
 
     except Exception as e:
-        logging.error(f"Error fetching CFOA data (Ticker: {ticker})!")
+        logging.error(f"Error occured while calculcating CFOA (Ticker: {ticker})!")
         logging.exception(f"Exception occurred: {e}")
         return None
 
@@ -1710,8 +1740,12 @@ def get_ebit_to_tev (stock, ticker):
     # Catch any general exceptions
     except Exception as ex:
 
-        logging.error(f"Unexpected exception occured while calculating EBIT/TEV ratio (Ticker: {ticker})!")
-        logging.exception(ex)
+        logging.error(f"Error while calculating EBIT/TEV ratio (Ticker: {ticker}): {ex}")
+        # Just log the exception message without the stack trace
+        # This is useful for debugging purposes, but can be removed in production code
+        # If you want to log the stack trace, you can use logging.exception(ex)
+        #if logging.getLogger().isEnabledFor(logging.DEBUG):
+        #    logging.exception(ex)
         return None, None
 
     return ebit_to_tev_ratio, enterprise_value
@@ -1873,7 +1907,7 @@ def analyze_stock (config, stock, ticker, weight):
             logging.info(f"EBIT/TEV (Ticker: {ticker}): N/A")
 
 
-            # Convert enterprise value to billions for consistency
+        # Convert enterprise value to billions for consistency
         enterprise_value_bill = None
         if enterprise_value is not None:
             enterprise_value_bill = enterprise_value / 1e9
@@ -2013,7 +2047,7 @@ def analyze_stock (config, stock, ticker, weight):
             roe_list = profitabilityCalc.calc_roe (stock, ticker, config, config.get("Earnings_Period"))
 
         except ValueError as value_error:
-            logging.error(f"ValueError calculating ROE (Ticker: {ticker}): {value_error}")
+            logging.error(f"Error calculating ROE (Ticker: {ticker}): {value_error}")
             roe_list = None
 
 
@@ -2143,7 +2177,7 @@ def analyze_stock (config, stock, ticker, weight):
         # -------------- Market Cap --------------
         # Convert Market Cap to billions
         market_cap = get_market_cap(stock)
-        market_cap_bill = market_cap / 1e9 if market_cap is not None else "N/A"  # Convert Market Cap to billions
+        market_cap_bill = round(market_cap / 1e9, 2) if market_cap is not None else "N/A"  # Convert Market Cap to billions
 
 
         # -------------- Sector and Industry --------------
@@ -2210,6 +2244,7 @@ def analyze_stock (config, stock, ticker, weight):
         stock_data.update({
             "Company": stock.info.get("longName", "N/A"),
             "Original Weight": weight,  # Add the original weight for the company
+            "Market Cap (in Billions)": market_cap_bill,
             "P/E (Forward)": '{:,.2f}'.format(forwardPE) if forwardPE is not None else "N/A",
             "P/E (Trailing)":  '{:,.2f}'.format(trailingPE) if trailingPE is not None else "N/A",
             "EBIT/TEV (%)": '{:,.2f}'.format(ebit_to_tev_perc) if ebit_to_tev_perc is not None else "N/A",
@@ -2230,8 +2265,7 @@ def analyze_stock (config, stock, ticker, weight):
             "GPMAR (ttm) (%)": '{:,.2f}'.format(gpmar_ttm_perc) if gpmar_ttm_perc is not None else "N/A",
             "Profit Margin (%)": '{:,.2f}'.format(profit_margin_percent) if profit_margin_percent is not None else "N/A",
             "Sector": sector,
-            "Industry": industry, 
-            "Market Cap (in Billions)": market_cap_bill
+            "Industry": industry
         })
 
         # Return the stock data and metrics
@@ -2285,7 +2319,7 @@ def analyze_one_stock (ticker_data):
         
     except Exception as e:
         # Log the error and return an invalid entry
-        logging.error(f"Error analyzing stock (Ticker: {ticker})!")
+        logging.critical(f"Error analyzing stock (Ticker: {ticker}): {e}!")
         logging.exception(e)
         invalid_entry = INVALID_TICKER_TEMPLATE.copy()
         invalid_entry["Company"] = ticker
@@ -2395,12 +2429,14 @@ if __name__ == "__main__":
         )
 
         # -------------------- Program Runtime --------------------
-    
         # Output program's runtime
         programRuntime = datetime.now() - programStartTime
         logging.info (f"Program total runtime: {programRuntime}")
 
     except Exception as e:
-        logging.critical("Unhandled ERROR running the Script occurred (Ticker: %s)!", current_ticker, exc_info=True)
+        logging.critical(f"Unhandled ERROR running the Script occurred (Ticker: {current_ticker}): {e} !")
         logging.exception(f"Unhandled exception occurred while running the script: {e}")
         raise e
+    
+    finally:
+        logging.shutdown()

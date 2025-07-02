@@ -9,10 +9,10 @@
     },
     "handlers": {
         "file": {
-            "level": "INFO",
+            "level": "DEBUG",
             "class": "logging.FileHandler",
             "formatter": "standard",
-            "filename": "default.log"
+            "filename": "StockFactorScreener.log"
         },
         "console": {
             "level": "DEBUG",

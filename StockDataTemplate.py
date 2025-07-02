@@ -14,6 +14,7 @@
 STOCK_DATA_TEMPLATE = {
     "Company": None,
     "Original Weight": None,
+    "Market Cap (in Billions)": None,
     "P/E (Forward)": None,
     "P/E (Trailing)": None,
     "EBIT/TEV (%)": None,
@@ -34,32 +35,31 @@ STOCK_DATA_TEMPLATE = {
     "GPMAR (ttm) (%)": None,
     "Profit Margin (%)": None,
     "Sector": None,
-    "Industry": None,
-    "Market Cap (in Billions)": None
+    "Industry": None
 }
 
 INVALID_TICKER_TEMPLATE = {
     "Company": None,  # to be set to ticker
     "Original Weight": None,  # to be set to weight
-    "P/E (Forward)": "Invalid Ticker!",
-    "P/E (Trailing)": "Invalid Ticker!",
-    "P/B": "Invalid Ticker!",
-    "EBIT/TEV (%)": "Invalid Ticker!",
-    "EPS (latest)": "Invalid Ticker!",
-    "EVAR - EPS (%)": "Invalid Ticker!",
-    "EVAR - Net Income (%)": "Invalid Ticker!",
-    "CAGR - EPS (%)": "Invalid Ticker!",
-    "CAGR - Net Income (%)": "Invalid Ticker!",
-    "Dividend Yield (%)": "Invalid Ticker!",
-    "ROE (ttm) - yFinance (%)": "Invalid Ticker!",
-    "ROE (ttm) - Calc (%)": "Invalid Ticker!",
-    "ROA - yFinance (%)": "Invalid Ticker!",
-    "ROA - Calc (%)": "Invalid Ticker!",
-    "CFOA (%)": "Invalid Ticker!",
-    "GPOA (ttm) (%)": "Invalid Ticker!",
-    "GPMAR (ttm) (%)": "Invalid Ticker!",
-    "Profit Margin (%)": "Invalid Ticker!",
-    "Sector": "Invalid Ticker!",
-    "Industry": "Invalid Ticker!",
-    "Market Cap (in Billions)": "Invalid Ticker!"
+    "Market Cap (in Billions)": "Invalid Ticker!",
+    "P/E (Forward)": "N/A",
+    "P/E (Trailing)": "N/A",
+    "P/B": "N/A",
+    "EBIT/TEV (%)": "N/A",
+    "EPS (latest)": "N/A",
+    "EVAR - EPS (%)": "N/A",
+    "EVAR - Net Income (%)": "N/A",
+    "CAGR - EPS (%)": "N/A",
+    "CAGR - Net Income (%)": "N/A",
+    "Dividend Yield (%)": "N/A",
+    "ROE (ttm) - yFinance (%)": "N/A",
+    "ROE (ttm) - Calc (%)": "N/A",
+    "ROA - yFinance (%)": "N/A",
+    "ROA - Calc (%)": "N/A",
+    "CFOA (%)": "N/A",
+    "GPOA (ttm) (%)": "N/A",
+    "GPMAR (ttm) (%)": "N/A",
+    "Profit Margin (%)": "N/A",
+    "Sector": "N/A",
+    "Industry": "N/A"
 }

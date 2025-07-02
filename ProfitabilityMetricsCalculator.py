@@ -182,12 +182,17 @@ def calc_roe (stock, ticker, config, years=4):
         # Fetch Shareholders' Equity (or Stockholders' Equity) from the balance sheet (annual data)
         balance_sheet = stock.balance_sheet.T  # Transpose to have dates as rows
 
-        # Get "Stockholders' Equity" from the balance sheet data
-        stockholders_equity_list = balance_sheet['Stockholders Equity'][:years]
+        try:
 
-        # If Stockholders' Equity is not available, log a warning and set ROE as None
-        if stockholders_equity_list is None:
-            raise ValueError(f"Cannot calculate ROE (Ticker: {ticker}): Data for Shareholder's Equity is missing")
+            # Get "Stockholders' Equity" from the balance sheet data
+            stockholders_equity_list = balance_sheet['Stockholders Equity'][:years]
+
+            # If Stockholders' Equity is not available, log a warning and set ROE as None
+            if stockholders_equity_list is None or stockholders_equity_list.empty:
+                raise ValueError(f"Cannot calculate ROE (Ticker: {ticker}): Data for Shareholder's Equity is missing")
+
+        except KeyError as key_error:
+                raise ValueError(f"Cannot calculate ROE (Ticker: {ticker}): Data for Shareholder's Equity is missing: {key_error}")
 
         # -------------- 3. Calculate ROE --------------
 
