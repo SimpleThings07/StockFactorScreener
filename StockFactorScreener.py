@@ -74,13 +74,13 @@ class __ProgramInfo__:
     minorVersion : str = "5"
     
     # PATCH: Incremented when backward compatible bug fixes are made. No new features are added. Some call this micro.
-    patchVersion : str = "3"
+    patchVersion : str = "4"
     
     # Build Date of the Application - Date Format: YYMMDD
     buildDate = datetime (
         year=2025,
         month=7,
-        day=2
+        day=3
     )
 
     # Complete Software Version - Major.Minor.Patch.BuildDate (yymmdd) -> e.g '1.0.0'
@@ -1744,8 +1744,8 @@ def get_ebit_to_tev (stock, ticker):
         # Just log the exception message without the stack trace
         # This is useful for debugging purposes, but can be removed in production code
         # If you want to log the stack trace, you can use logging.exception(ex)
-        #if logging.getLogger().isEnabledFor(logging.DEBUG):
-        #    logging.exception(ex)
+        if logging.getLogger().isEnabledFor(logging.DEBUG):
+            logging.exception(ex)
         return None, None
 
     return ebit_to_tev_ratio, enterprise_value

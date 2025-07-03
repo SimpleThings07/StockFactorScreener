@@ -102,6 +102,8 @@ def calc_value_z_scores(stocks: List["Stock"], value_cfg) -> ZScoreDict:  # noqa
     # gather columns
     tickers, pe_t, pe_f, ebit_tev, pb_ratio = [], [], [], [], []
 
+    # TODO: What if EBIT/TEV is negative? Use P/B ratio instead or is EBIT/TEV negative good as long as EBIT is positive?
+
     # Iterate over all stocks
     for stock in stocks:
 
