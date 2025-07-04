@@ -45,7 +45,7 @@ from ValueMetrics import (
 
 )
 from Stock import Stock
-import ProfitabilityMetricsCalculator as profitabilityCalc
+import ProfitabilityCalculator as profitabilityCalc
 from StockDataTemplate import STOCK_DATA_TEMPLATE, INVALID_TICKER_TEMPLATE
 from ZScoreCalculator import (
     calc_value_z_scores,
@@ -74,7 +74,7 @@ class __ProgramInfo__:
     minorVersion : str = "5"
     
     # PATCH: Incremented when backward compatible bug fixes are made. No new features are added. Some call this micro.
-    patchVersion : str = "4"
+    patchVersion : str = "5"
     
     # Build Date of the Application - Date Format: YYMMDD
     buildDate = datetime (
@@ -1405,85 +1405,6 @@ def calc_roa (stock, ticker, config, years=4):
 
 
 
-def calc_cfoa (stock, ticker):
-    """
-    Calculates Cash Flow Over Assets (CFOA) for the past specified number of years using Yahoo Finance data.
-    Cash Flow Over Assets (CFOA) is calculated as:
-
-        CFOA = Cash Flow from Operating Activities / Total Assets
-
-    Parameters:
-        - stock (yf.Ticker): A yfinance Ticker object representing the stock.
-        - ticker (str): Stock ticker symbol.
-
-    Returns:
-        - list: CFOA values for each year.
-    """
-    # Initialize the CFOA dictionary
-    cfoa_list = []
-
-    # Fetch the Cash Flow from Operating Activities (CFOA) data from Yahoo Finance
-    try:
-
-        # ---------------------- Cash Flow from Operating Activities ----------------------
-        cash_flow_operating = None
-        try:
-
-            # Fetch the Cash Flow from Operating Activities (CFOA) data
-            cash_flow_operating = stock.cashflow.loc['Operating Cash Flow']
-
-            # Check if the CFOA data is available
-            if cash_flow_operating is None:
-                logging.error(f"No Cash Flow from Operating Activities data found (Ticker: {ticker}). Cannot calculate CFOA!")
-                return None
-
-            # Convert the CFOA data to a list
-            cash_flow_operating = cash_flow_operating.tolist()
-
-        except KeyError:
-            logging.error(f"Cannot calculate CFOA! 'Operating Cash Flow' data is missing in the cash flow statement (Ticker: {ticker}).")
-            return None
-
-
-        # ---------------------- Total Assets ----------------------
-        total_assets = None
-        try:
-
-            # Fetch the Total Assets data from the balance sheet
-            total_assets = stock.balance_sheet.loc['Total Assets']
-
-            # Check if the Total Assets data is available
-            if total_assets is None:
-                logging.error(f"No Total Assets data found (Ticker: {ticker}). Cannot calculate CFOA!")
-                return None
-            
-            # Convert the Total Assets data to a list
-            total_assets = total_assets.tolist()
-
-        except KeyError:
-            logging.error(f"Cannot calculate CFOA! 'Total Assets' data is missing in the balance sheet (Ticker: {ticker}).")
-            return None
-
-
-        # ---------------------- Calculate CFOA  ----------------------
-        # Get the CFOA data for the requested number of years if available
-        for i in range(0, min ( len(cash_flow_operating), len(total_assets) ) ):
-
-            # Calculate the CFOA for each year
-            cfoa = cash_flow_operating[i] / total_assets[i]
-            # Only append if not NaN
-            if not pd.isna(cfoa):
-                cfoa_list.append(cfoa)
-
-        return cfoa_list
-
-    except Exception as e:
-        logging.error(f"Error occured while calculcating CFOA (Ticker: {ticker})!")
-        logging.exception(f"Exception occurred: {e}")
-        return None
-
-
-
 def calc_gross_profit_metrics(config, stock, ticker, data_period_req):
 
     """
@@ -1601,13 +1522,14 @@ def calc_gross_profit_metrics(config, stock, ticker, data_period_req):
             )
 
             # Check if the Balance Sheet data is available
-            if annual_balance_sheets is None:
+            total_assets = None
+            if annual_balance_sheets:
+                # Fetch Total Assets data from Balance Sheets (Alpha Vantage)
+                total_assets = [float(balance_sheet.get("totalAssets", 0)) for balance_sheet in annual_balance_sheets]
+            else:
                 logging.error(f"No Total Assets data found (Ticker: {ticker}). Cannot calculate GPOA!")
                 logging.error(f"Only GPMAR calculcation can be done (Ticker: {ticker}).")
                 total_assets = None
-            
-            # Fetch Total Assets data from Balance Sheets (Alpha Vantage)
-            total_assets = [float(balance_sheet.get("totalAssets", 0)) for balance_sheet in annual_balance_sheets]
 
 
 
@@ -2046,8 +1968,8 @@ def analyze_stock (config, stock, ticker, weight):
             # Calculate ROE using Net Income and Shareholder's Equity 
             roe_list = profitabilityCalc.calc_roe (stock, ticker, config, config.get("Earnings_Period"))
 
-        except ValueError as value_error:
-            logging.error(f"Error calculating ROE (Ticker: {ticker}): {value_error}")
+        except profitabilityCalc.ROECalcError as roe_error:
+            logging.error(f"Error calculating ROE (Ticker: {ticker}): {roe_error}")
             roe_list = None
 
 
@@ -2059,14 +1981,13 @@ def analyze_stock (config, stock, ticker, weight):
 
             # Convert ROE to percentage
             roe_calc_perc = roe_ttm * 100 if roe_ttm is not None else None
-            if roe_ttm_yf_perc is not None:
-                logging.info(f"ROE - Calc (Ticker: {ticker}): {round(roe_calc_perc, 2)} %")
+            if roe_ttm_yf_perc is not None and roe_calc_perc is not None:
+                logging.info("ROE - Calc (Ticker: %s): %.2f %%", ticker, round(roe_calc_perc, 2))
             else:
-                logging.info(f"ROE - Calc (Ticker: {ticker}): N/A")
+                logging.info("ROE - Calc (Ticker: %s): N/A", ticker)
 
-
-        except ValueError as value_error:
-            logging.error(f"ValueError calculating ROE (ttm) (Ticker: {ticker}): {value_error}")
+        except profitabilityCalc.ROECalcError as roe_error:
+            logging.error(f"Error calculating ROE (ttm) (Ticker: {ticker}): {roe_error}")
             roe_ttm = None
 
 
@@ -2112,17 +2033,38 @@ def analyze_stock (config, stock, ticker, weight):
         if roa_list is not None:
             # Convert ROA to percentage
             roa_calc_perc = roa_list[0] * 100 if roa_list[0] is not None else None
-            logging.info(f"ROA - Calc (Ticker: {ticker}): {round(roa_calc_perc, 2)} %")
+            if roa_calc_perc is not None:
+                logging.info("ROA - Calc (Ticker: %s): %.2f %%", ticker, round(roa_calc_perc, 2))
+            else:
+                logging.info("ROA - Calc (Ticker: %s): N/A", ticker)
         else:
             logging.error(f"Cannot calculate ROA (Ticker: {ticker}): ROA list is empty")
             roa_calc_perc = None
 
 
         # -------------- Cash Flow Over Assets (CFOA) --------------
+        cfoa_list, cfoa_latest_perc = None, None
+        try:
+            cfoa_list = profitabilityCalc.calc_cfoa (stock, ticker)
+            cfoa_latest_perc = round(cfoa_list[0] * 100, 2) if cfoa_list is not None else None
+            logging.info(f"CFOA (annual) (Ticker: {ticker}): {cfoa_latest_perc} %")
 
-        cfoa_list = calc_cfoa (stock, ticker)
-        cfoa_latest_perc = round(cfoa_list[0] * 100, 2) if cfoa_list is not None else None
-        logging.info(f"CFOA (Ticker: {ticker}): {cfoa_latest_perc} %")
+        except profitabilityCalc.CFOACalcError as cfoa_error:
+            logging.error(f"Error calculating CFOA (annual) (Ticker: {ticker}): {cfoa_error}")
+            cfoa_list = None
+            cfoa_latest_perc = None
+
+        # Calculate CFOA TTM
+        cfoa_ttm, cfoa_ttm_perc = None, None
+        try:
+            cfoa_ttm = profitabilityCalc.calc_cfoa_ttm (stock, ticker)
+            cfoa_ttm_perc = round(cfoa_ttm * 100, 2) if cfoa_ttm is not None else None
+            logging.info(f"CFOA (ttm) (Ticker: {ticker}): {cfoa_ttm_perc} %")
+
+        except profitabilityCalc.CFOACalcError as cfoa_error:
+            logging.error(f"Error calculating CFOA (ttm) (Ticker: {ticker}): {cfoa_error}")
+            cfoa_ttm = None
+            cfoa_ttm_perc = None
 
 
         # --------------   Gross Profits Over Assets (GPOA)
@@ -2152,7 +2094,7 @@ def analyze_stock (config, stock, ticker, weight):
             gpoa_ttm_perc = round(gpoa_ttm * 100, 2) if gpoa_ttm is not None else None
 
             # Calculate GPMAR
-            gpmar_ttm = profitabilityCalc.calc_gpmar_ttm ( stock, ticker )
+            gpmar_ttm =  profitabilityCalc.calc_gpmar_ttm ( stock, ticker )
             # Convert GPMAR to percentage
             gpmar_ttm_perc = round(gpmar_ttm * 100, 2) if gpmar_ttm is not None else None
 
@@ -2260,7 +2202,8 @@ def analyze_stock (config, stock, ticker, weight):
             "ROE (ttm) - Calc (%)": '{:,.2f}'.format(roe_calc_perc) if roe_calc_perc is not None else "N/A",
             "ROA - yFinance (%)": '{:,.2f}'.format(roa_ttm_yf_perc) if roa_ttm_yf_perc is not None else "N/A",
             "ROA - Calc (%)": '{:,.2f}'.format(roa_calc_perc) if roa_calc_perc is not None else "N/A",
-            "CFOA (%)": '{:,.2f}'.format(cfoa_latest_perc) if cfoa_latest_perc is not None else "N/A",
+            "CFOA (annual) (%)": '{:,.2f}'.format(cfoa_latest_perc) if cfoa_latest_perc is not None else "N/A",
+            "CFOA (ttm) (%)": '{:,.2f}'.format(cfoa_ttm_perc) if cfoa_ttm_perc is not None else "N/A",
             "GPOA (ttm) (%)": '{:,.2f}'.format(gpoa_ttm_perc) if gpoa_ttm_perc is not None else "N/A",
             "GPMAR (ttm) (%)": '{:,.2f}'.format(gpmar_ttm_perc) if gpmar_ttm_perc is not None else "N/A",
             "Profit Margin (%)": '{:,.2f}'.format(profit_margin_percent) if profit_margin_percent is not None else "N/A",
