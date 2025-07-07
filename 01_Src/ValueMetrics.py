@@ -60,7 +60,6 @@ class ValueMetrics:
 
 
 def get_operating_income_ttm (stock, ticker):
-
     """
     Calculate the operating income (EBIT) from the quarterly financials as TTM.
     EBIT (Earnings Before Interest and Taxes) is a measure of a firm's profit that includes all incomes and expenses (except interest expenses and income tax expenses).
@@ -75,6 +74,9 @@ def get_operating_income_ttm (stock, ticker):
           $20k/yr
         - What I'm left with is my operating income, or EBIT.
           $15k/yr
+
+    Raises:
+        OperatingIncomeError: If required operating income or pretax income data is missing or insufficient.
     """
 
     operating_income_ttm = None
@@ -129,7 +131,6 @@ def get_operating_income_ttm (stock, ticker):
 
 
 def get_operating_income_annual (stock, ticker):
-
     """
     Calculate the operating income (EBIT) from the latest annual data.
     EBIT (Earnings Before Interest and Taxes) is a measure of a firm's profit that includes all incomes and expenses (except interest expenses and income tax expenses).
@@ -144,6 +145,9 @@ def get_operating_income_annual (stock, ticker):
           $20k/yr
         - What I'm left with is my operating income, or EBIT.
           $15k/yr
+
+    Raises:
+        OperatingIncomeError: If required operating income or pretax income data is missing or insufficient.
     """
 
     # Function output
@@ -211,6 +215,9 @@ def get_operating_income_annual (stock, ticker):
 def get_total_debt (balance_sheet):
     """
     Calculate the total debt from the balance sheet.
+
+    Raises:
+        ValueError: If total debt data is not available.
     """
 
     # Fetch the Total Debt data from the Balance Sheet (Yahoo Finance)
@@ -237,6 +244,9 @@ def get_market_cap (stock):
     Calculate the market capitalization.
 
     Market value of equity is the total dollar value of a company's equity and is also known as market capitalization. This measure of a company's value is calculated by multiplying the current stock price by the total number of outstanding shares.
+
+    Returns:
+        float: The market capitalization of the company, or None if not available.
     """
 
     # Function output
@@ -293,6 +303,8 @@ def get_market_cap_annual (stock, ticker):
         Returns:
             - float: The market capitalization of the company.
 
+        Raises:
+            ValueError: If balance sheet or share/price data is missing or insufficient.
     """
 
     # Function output
@@ -362,6 +374,9 @@ def calc_enterprise_value_latest(stock, ticker):
 
     Returns:
         - float: The enterprise value of the company.
+
+    Raises:
+        ValueError: If market cap or balance sheet data is missing or insufficient.
     """
 
     # 1) Equity Value (Market Cap)
@@ -445,6 +460,9 @@ def calc_enterprise_value_annual (stock, ticker):
 
     Returns:
         - float: The enterprise value of the company.
+
+    Raises:
+        ValueError: If market cap or balance sheet data is missing or insufficient.
     """
 
     # 1) Equity Value (Market Cap)
@@ -528,6 +546,10 @@ def calc_ebit_to_tev (stock, ticker):
 
     Returns:
         - float: EBIT/TEV ratio
+
+    Raises:
+        ValueError: If operating income or enterprise value is zero or missing for both quarterly and annual data.
+        OperatingIncomeError: If required operating income or pretax income data is missing or insufficient.
     """
 
     ebit_to_tev, total_enterprise_value = None, None
@@ -578,4 +600,4 @@ def calc_ebit_to_tev (stock, ticker):
 
 
     return ebit_to_tev, total_enterprise_value
-    
+

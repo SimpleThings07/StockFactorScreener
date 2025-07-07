@@ -114,6 +114,9 @@ def calc_roe_ttm (stock, ticker):
 
         Returns:
             - float: The calculated Return on Equity (ROE) TTM, or None if data is missing. Calculated as a fraction.
+
+        Raises:
+            ROECalcError: If required data is missing or calculation fails.
     """
 
     roe_ttm = None
@@ -224,6 +227,9 @@ def calc_roe (stock, ticker, config, years=4):
 
         Returns:
             - float: The calculated Return on Equity (ROE) for the specified range of years, or None if data is missing. Calculated as a fraction.
+
+        Raises:
+            ValueError: If required data is missing or calculation fails.
     """
 
     o_roe_calc_list = []
@@ -297,6 +303,9 @@ def calc_roe_msci (stock, ticker):
         
     Returns:
         - dict: Contains EPS (TTM), BVPS, and ROE as percentage.
+
+    Raises:
+        ROECalcError: If EPS or BVPS data is missing or division by zero occurs.
     """
 
     # -------------------------- 1. Get Trailing EPS (TTM) --------------------------
@@ -343,6 +352,9 @@ def calc_quarterly_bvps (stock, ticker):
 
     Returns:
         - float: The calculated BVPS, or None if data is missing.
+
+    Raises:
+        BVPSCalcError: If required data is missing or calculation fails.
     """
     o_bvps = None
 
@@ -473,10 +485,34 @@ def calc_gpoa_ttm ( stock, ticker ):
 
         Returns:
             - float: The calculated Gross Profits over Assets (GPOA) TTM, or None if data is missing. Calculated as a fraction.
+
+        Raises:
+            GPOACalcError: If required data is missing, dates do not match, or division by zero occurs.
     
     """
 
     gpoa_ttm = None
+
+
+    # --------------------------- Dates match for both Gross Profit and Total Assets ? ---------------------------
+
+    # Check if 'Gross Profit' exists in quarterly financials
+    if 'Gross Profit' not in stock.quarterly_financials.index:
+        raise GPOACalcError(f"Cannot calculate GPOA TTM (Ticker: {ticker}): 'Gross Profit' not found in quarterly Income Statement.")
+    # Check if 'Total Assets' exists in quarterly balance sheet
+    if 'Total Assets' not in stock.quarterly_balance_sheet.index:
+        raise GPOACalcError(f"Cannot calculate GPOA TTM (Ticker: {ticker}): 'Total Assets' not found in quarterly Balance Sheet.")
+
+    # Get the latest quarter date for Gross Profit
+    gp_latest_quarterly_date = stock.quarterly_financials.loc['Gross Profit'].index[0]
+
+    # get the latest quarter date for Cash Flow from Operating Activities
+    gp_latest_quarterly_date = stock.quarterly_balance_sheet.loc['Total Assets'].index[0]
+
+    # Check if the latest quarter dates for Cash Flow from Operating Activities and Total Assets match
+    if gp_latest_quarterly_date != gp_latest_quarterly_date:
+        # Raise GPOA Calculaction Error
+        raise GPOACalcError(f"Cannot calculate GPOA TTM (Ticker: {ticker}): The latest quarter dates for Gross Profit and Total Assets do not match. \n Gross Profit date: {gp_latest_quarterly_date}, Total Assets date: {gp_latest_quarterly_date}.")
 
 
     # --------------------------- Gross Profit ---------------------------
@@ -486,7 +522,7 @@ def calc_gpoa_ttm ( stock, ticker ):
 
     if 'Gross Profit' not in income_statement.columns:
         # Raise GPOA Calculaction Error
-        raise GPOACalcError(f"Cannot calculate GPOA (Ticker: {ticker}): 'Gross Profit' data is missing in the Income Statement.")
+        raise GPOACalcError(f"Cannot calculate GPOA TTM (Ticker: {ticker}): 'Gross Profit' data is missing in the Income Statement.")
 
 
     # Get the Gross Profit Data and clean 'nan' values
@@ -507,7 +543,7 @@ def calc_gpoa_ttm ( stock, ticker ):
     balance_sheet = stock.quarterly_balance_sheet.T  # Transpose to have dates as rows
 
     if 'Total Assets' not in balance_sheet.columns:
-        raise GPOACalcError(f"Cannot calculate GPOA (Ticker: {ticker}): 'Total Assets' data is missing in the Balance Sheet.")
+        raise GPOACalcError(f"Cannot calculate GPOA TTM (Ticker: {ticker}): 'Total Assets' data is missing in the Balance Sheet.")
 
     # Get the Total Assets Data and clean 'nan' values
     total_assets_list = balance_sheet['Total Assets'].tolist()
@@ -565,11 +601,11 @@ def calc_gpmar_ttm ( stock, ticker ):
         raise GPMARCalcError(f"Cannot calculate GPOA TTM (Ticker: {ticker}): Not enough Gross Profit quarterly data is available. \n Data for at least 4 quarters is required.")
     
     # Get the latest four quarters of Gross Profit
-    gross_profit_ttm = sum(gross_profit_list[:4])  # Sum the latest four quarters of Gross Profit data
-
+    gross_profit_ttm = sum (gross_profit_list[:4])  # Sum the latest four quarters of Gross Profit data
 
 
     # --------------- Revenue ---------------
+    
     if 'Total Revenue' not in income_statement.columns:
         raise GPMARCalcError(f"Cannot calculate GPMAR (Ticker: {ticker}): 'Total Revenue' data is missing in the Income Statement.")
 
@@ -610,6 +646,9 @@ def calc_cfoa (stock, ticker):
 
     Returns:
         - list: CFOA values for each year.
+
+    Raises:
+        CFOACalcError: If required data is missing or calculation fails.
     """
     # Initialize the CFOA dictionary
     cfoa_list = []
@@ -683,11 +722,22 @@ def calc_cfoa_ttm (stock, ticker):
 
     Returns:
         - cfoa_ttm (float): CFOA value for the TTM period, or Exception if data is missing.
+
+    Raises:
+        CFOACalcError: If required data is missing, dates do not match, or calculation fails.
     """
 
     cfoa_ttm = None
 
     try:
+
+
+        # Check if 'Operating Cash Flow' exists in quarterly income statement
+        if 'Operating Cash Flow' not in stock.quarterly_cashflow.index:
+            raise CFOACalcError(f"Cannot calculate CFOA TTM (Ticker: {ticker}): 'Operating Cash Flow' not found in quarterly Income Statement.")
+        # Check if 'Total Assets' exists in quarterly balance sheet
+        if 'Total Assets' not in stock.quarterly_balance_sheet.index:
+            raise CFOACalcError(f"Cannot calculate CFOA TTM (Ticker: {ticker}): 'Total Assets' not found in quarterly Balance Sheet.")
 
         # Make sure the dates match for both Cash Flow from Operating Activities and Total Assets
         # This is important to ensure that the CFOA is calculated correctly for the TTM period.
@@ -766,209 +816,196 @@ def calc_cfoa_ttm (stock, ticker):
 
 
 
-def calc_gross_profit_metrics(config, stock, ticker, data_period_req):
-
+def calc_gpoa_annual (stock, ticker, config, data_period_req):
     """
+    Calculates annual Gross Profit over Assets (GPOA) for the specified number of years.
 
-    Calculates annual Gross Profit Profitability Metrics:
-        1) Gross Profit over Assets (GPOA)
-        2) Gross Profit Margin (GPMAR)
-
-    1) Calculates Gross Profits over Assets (GPOA) using Gross Profits and Total Assets for specified number of years.
-
-        GPOA is calculated as: GPOA = Gross Profit / Total Assets
-
-            Gross Profit = Total Revenue - Cost of Goods Sold
-
-    2) Calculates Gross Profit Margin (GPMAR) using Gross Profit and Revenue for specified number of years.
-
-        GPMAR is calculated as: GPMAR = Gross Profit / Revenue
+    GPOA is calculated as:
+        GPOA = Gross Profit / Total Assets
 
     Parameters:
-        - config (dict): A dictionary containing the configuration settings.
-        - stock (yf.Ticker): A yfinance Ticker object representing the stock.
-        - ticker (str): The stock ticker symbol.
-        - data_period_req (int): The number of years for which to calculate GPOA & GPMAR.
+        - config (dict): Configuration settings.
+        - stock (yf.Ticker): yfinance Ticker object.
+        - ticker (str): Stock ticker symbol.
+        - data_period_req (int): Number of years to calculate.
 
     Returns:
-        - tuple: A tuple containing the GPOA and GPMAR lists with the annual metrics for the specified number of years.
+        - list: GPOA annual values for each year.
 
-    https://www.alphavantage.co/documentation/#income-statement
+    Raises:
+        GPOACalcError: If required data is missing or calculation fails.
     """
-
-
-    # -------------- 1. Fetch the data ----------------
-
-
-    # Initialize the GPOA list
     gpoa_list = []
-    # Initialize the GPMAR list
-    gpmar_list = []
 
-    messages = None
+    # Check that data_period_req is a positive integer at the start.
+    if not isinstance(data_period_req, int) or data_period_req <= 0:
+        raise GPOACalcError("data_period_req must be a positive integer.")
 
     try:
-        # Fetch the Gross Profit data from the financials
-        income_statement = stock.financials.T   # Transpose to have dates as rows
 
-        # Check if the Income Statement data is available
+        gross_profits, total_assets = None, None
+
+        # Fetch annual income statement
+        income_statement = stock.financials.T
         if income_statement is None:
-            raise GPOACalcError (f"No Income Statement data found (Ticker: {ticker}). Cannot calculate GPOA & GPMAR!")
+            raise GPOACalcError (f"No Income Statement data found (Ticker: {ticker}). Cannot calculate GPOA!")
 
-        # Initialize the Gross Profit list (for GPOA & GPMAR calculation)
-        gross_profits = []
-        # Initialize the Total Assets list (for GPOA calculation)
-        total_assets = []
-        # Initialize the Total Revenue list (for GPMAR calculation)
-        total_revenues = []
+        # Check if both 'Gross Profit' and 'Total Assets' are available in the income statement and balance sheet
+        if 'Gross Profit' in income_statement.columns and 'Total Assets' in stock.balance_sheet.columns:
 
-        # Check if 'Gross Profit' data is available in the income statement
-        if 'Gross Profit' in income_statement.columns:
-
-            # Fetch the Gross Profit data from the Income Statement (Yahoo Finance)
+            # Get the Gross Profit Data and clean 'nan' values
             gross_profits = income_statement['Gross Profit'].tolist()
-
-            # Remove 'nan' values from the Gross Profit list
             gross_profits = [gross_profit for gross_profit in gross_profits if not math.isnan(gross_profit)]
 
-
-            # Fetch the Total Revenue data from the Income Statement (Yahoo Finance)
-            total_revenues = income_statement['Total Revenue'].tolist()
-
-            # Remove 'nan' values from the Total Revenue list
-            total_revenues = [total_revenue for total_revenue in total_revenues if not math.isnan(total_revenue)]
-
-
-            # Fetch the Total Assets data from the Balance Sheet (Yahoo Finance)
+            # Get the Total Assets Data and clean 'nan' values
             total_assets = stock.balance_sheet.loc['Total Assets'].tolist()
+            total_assets = [ta for ta in total_assets if not math.isnan(ta)]
 
-            # Remove 'nan' values from the Total Assets list
-            total_assets = [total_asset for total_asset in total_assets if not math.isnan(total_asset)]
-
+        # Use Alpha Vantage API as fallback if data is not available in yfinance
         else:
-            # logging.warning (f"Gross Profit data not found on Yahoo Finance (Ticker: {ticker}).")
-            # logging.warning (f"Fetching Gross Profit data from 'Alpha Vantage'.")
 
-            # -------------- 1.1 Gross Profit --------------
+            # ------------------------ Gross Profits ------------------------
 
-            # Fallback to Alpha Vantage to fetch Income Statement for Gross Profit data
-            annual_income_statements = get_income_statement_alpha_vantage (
+            # Fetch annual income statements from Alpha Vantage
+            income_statements_annual = get_income_statement_alpha_vantage (
                 config['AlphaVantage']['API_Key'],
                 config['AlphaVantage']['Base_URL'],
                 ticker,
                 "annual"
             )
 
-            # Check if the Income Statement data is available
-            if annual_income_statements is None:
-                raise GPOACalcError (f"No Gross Profit data found (Ticker: {ticker}). Cannot calculate GPOA & GPMAR!")
+            # Check if income statements are available
+            if income_statements_annual is None:
+                raise GPOACalcError (f"No Gross Profit data found (Ticker: {ticker}). Cannot calculate GPOA!")
 
+            gross_profits = [float(income_statement.get("grossProfit", 0)) for income_statement in income_statements_annual]
 
-            # Fetch Gross Profit data from Income Statements (Alpha Vantage)
-            gross_profits = [float(income_statement.get("grossProfit", 0)) for income_statement in annual_income_statements]
+            # ------------------------- Total Assets ------------------------
 
-            # -------------- 1.2 Total Revenues --------------
-
-            # Fetch Total Revenue data from the Income Statements (Alpha Vantage)
-            total_revenues = [float(income_statement.get("totalRevenue", 0)) for income_statement in annual_income_statements]
-
-
-            # -------------- 1.3 Total Assets --------------
-
-            # Fallback to Alpha Vantage to fetch Balance Sheet data for Total Assets
-            annual_balance_sheets = get_balance_sheet_alpha_vantage (
-                config['AlphaVantage']['API_Key'], 
-                config['AlphaVantage']['Base_URL'], 
+            # Fetch annual balance sheets from Alpha Vantage
+            annual_balance_sheets = get_balance_sheet_alpha_vantage(
+                config['AlphaVantage']['API_Key'],
+                config['AlphaVantage']['Base_URL'],
                 ticker,
                 "annual"
             )
 
-            # Check if the Balance Sheet data is available
-            total_assets = None
+            # Check if income statements are available
+            if income_statements_annual is None:
+                raise GPOACalcError (f"No Gross Profit data found (Ticker: {ticker}). Cannot calculate GPOA!")
+
+            gross_profits = [float(income_statement.get("grossProfit", 0)) for income_statement in income_statements_annual]
+
+            # ------------------------- Total Assets ------------------------
+
+            # Fetch annual balance sheets from Alpha Vantage
+            annual_balance_sheets = get_balance_sheet_alpha_vantage(
+                config['AlphaVantage']['API_Key'],
+                config['AlphaVantage']['Base_URL'],
+                ticker,
+                "annual"
+            )
+
+            # Check if balance sheets are available
             if annual_balance_sheets:
-                # Fetch Total Assets data from Balance Sheets (Alpha Vantage)
-                total_assets = [float(balance_sheet.get("totalAssets", 0)) for balance_sheet in annual_balance_sheets]
+                total_assets = [float(bs.get("totalAssets", 0)) for bs in annual_balance_sheets]
             else:
-                #logging.error(f"No Total Assets data found (Ticker: {ticker}). Cannot calculate GPOA!")
-                #logging.error(f"Only GPMAR calculcation can be done (Ticker: {ticker}).")
                 total_assets = None
 
+        # Check if Gross Profits and Total Assets data are available
+        if gross_profits is None or total_assets is None:
+            raise GPOACalcError(f"Cannot calculate GPOA (Ticker: {ticker}): Missing Gross Profit or Total Assets data.")
 
 
-        # -------------- 2.1 Calculate GPOA --------------
+        # ---------------- Calculate GPOA --------
 
-        # GPOA = Gross Profit / Total Assets
+        try:
+            for i in range(0, min ( len(total_assets), len(gross_profits), data_period_req) ):
+                gpoa = gross_profits[i] / total_assets[i]
+                gpoa_list.append(gpoa)
+        except Exception:
+            raise GPOACalcError(f"Cannot calculate GPOA (Ticker: {ticker}): Error during calculation. Ensure Gross Profit and Total Assets data is valid and not zero.")
 
-        # Check if 'Gross Profit' and 'Total Asset' data is available
-        if gross_profits and total_assets:
+    except Exception as exc:
+        raise GPOACalcError(f"Error occurred while calculating GPOA (Ticker: {ticker}): {exc}") from exc
 
-            try:
-                # Calculate GPOA data for the requested number of years
-                for i in range (0, min ( len(total_assets), len(gross_profits), data_period_req ) ):
-
-                    # Calculate the GPOA for each year
-                    gpoa = gross_profits[i] / total_assets[i]
-
-                    # Append the GPOA value to the list
-                    gpoa_list.append(gpoa)
+    return gpoa_list
 
 
-            # Handle Division by Zero error
-            except ZeroDivisionError:
-                #logging.error(f"Error calculating GPOA (Ticker: {ticker}): Division by zero detected.")
-                gpoa_list = None
 
-            except Exception as e:
-                #logging.error(f"Error fetching GPOA data (Ticker: {ticker})!")
-                #logging.exception(f"Exception occurred: {e}")
-                gpoa_list = None
+def calc_gpmar_annual (stock, ticker, config, data_period_req):
+    """
+    Calculates annual Gross Profit Margin (GPMAR) for the specified number of years.
 
-        # Skip GPOA calculation if Total Assets data is missing
+    GPMAR is calculated as:
+        GPMAR = Gross Profit / Revenue
+
+    Parameters:
+        - config (dict): Configuration settings.
+        - stock (yf.Ticker): yfinance Ticker object.
+        - ticker (str): Stock ticker symbol.
+        - data_period_req (int): Number of years to calculate.
+
+    Returns:
+        - list: GPMAR annual values for each year.
+
+    Raises:
+        GPMARCalcError: If required data is missing or calculation fails.
+    """
+    gpmar_list = []
+
+    # Check that data_period_req is a positive integer at the start.
+    if not isinstance(data_period_req, int) or data_period_req <= 0:
+        raise GPMARCalcError("data_period_req must be a positive integer.")
+
+    try:
+        gross_profits, total_revenues = None, None
+
+        # Fetch annual income statement
+        income_statement = stock.financials.T
+        if income_statement is None:
+            raise GPMARCalcError(f"No Income Statement data found (Ticker: {ticker}). Cannot calculate GPMAR!")
+
+        # Check if both 'Gross Profit' and 'Total Revenue' are available in the income statement
+        if 'Gross Profit' in income_statement.columns and 'Total Revenue' in income_statement.columns:
+            # Get the Gross Profit Data and clean 'nan' values
+            gross_profits = income_statement['Gross Profit'].tolist()
+            gross_profits = [gross_profit for gross_profit in gross_profits if not math.isnan(gross_profit)]
+
+            # Get the Total Revenue Data and clean 'nan' values
+            total_revenues = income_statement['Total Revenue'].tolist()
+            total_revenues = [total_revenue for total_revenue in total_revenues if not math.isnan(total_revenue)]
         else:
-            gpoa_list = None
+            # ------------------------ Gross Profits & Revenue from Alpha Vantage ------------------------
+            income_statements_annual = get_income_statement_alpha_vantage (
+                config['AlphaVantage']['API_Key'],
+                config['AlphaVantage']['Base_URL'],
+                ticker,
+                "annual"
+            )
+            if income_statements_annual is None:
+                raise GPMARCalcError(f"No Gross Profit data found (Ticker: {ticker}). Cannot calculate GPMAR!")
+            gross_profits = [float(is_annual.get("grossProfit", 0)) for is_annual in income_statements_annual]
+            total_revenues = [float(is_annual.get("totalRevenue", 0)) for is_annual in income_statements_annual]
 
-        # -------------- END of 2.1 Calculate GPOA --------------
+        # Check if Gross Profits and Total Revenues data are available
+        if gross_profits is None or total_revenues is None:
+            raise GPMARCalcError(f"Cannot calculate GPMAR (Ticker: {ticker}): Missing Gross Profit or Total Revenue data.")
 
+        # ---------------- Calculate GPMAR --------
+        try:
+            for i in range(0, min(len(total_revenues), len(gross_profits), data_period_req)):
+                if total_revenues[i] == 0:
+                    raise GPMARCalcError(f"Cannot calculate GPMAR (Ticker: {ticker}): Total Revenue is zero for year index {i}, division by zero is not allowed.")
+                gpmar = gross_profits[i] / total_revenues[i]
+                gpmar_list.append(gpmar)
+        except Exception as exc:
+            raise GPMARCalcError (f"Cannot calculate GPMAR (Ticker: {ticker}): Error during calculation. Ensure Gross Profit and Total Revenue data is valid and not zero. {exc}")
 
-        # -------------- 2.2 Calculate GPMAR --------------
-        # GPMAR = Gross Profit / Revenue
+    except Exception as exc:
+        raise GPMARCalcError(f"Error occurred while calculating GPMAR (Ticker: {ticker}): {exc}") from exc
 
-        # Check if 'Gross Profit' and 'Total Revenue' data is available
-        if gross_profits and total_revenues:
-
-            try:
-
-                # Calculate GPMAR data for the requested number of years
-                for i in range (0, min ( len(total_revenues), len(gross_profits), data_period_req ) ):
-
-                    # Calculate the GPMAR for each year
-                    gpmar = gross_profits[i] / total_revenues[i]
-
-                    # Append the GPMAR value to the list
-                    gpmar_list.append(gpmar)
-
-            # Handle Division by Zero error
-            except ZeroDivisionError:
-                #logging.error(f"Error calculating GPMAR (Ticker: {ticker}): Division by zero detected.")
-                gpoa_list = None
-
-            except Exception as e:
-                #logging.error(f"Error fetching GPMAR data (Ticker: {ticker})!")
-                #logging.exception(f"Exception occurred: {e}")
-                gpoa_list = None
-
-        else:
-            gpmar_list = None
-
-        # -------------- 2.2 END of Calculate GPMAR --------------
-
-    except Exception as e:
-        #logging.error(f"Error calculating GPOA & GPMAR (Ticker {ticker})!")
-        #logging.exception(f"Exception occurred: {e}")
-        return None, None
-
-
-    return gpoa_list, gpmar_list
+    return gpmar_list
 
 
 
@@ -995,6 +1032,9 @@ def calc_cagr (ticker, earnings):
 
     Returns:
         - float: The CAGR as a decimal (non-percentage) value.
+
+    Raises:
+        CAGRCalcError: If required data is missing, insufficient, or calculation fails.
     """
 
     MIN_GROWTH_DATA_POINTS = 2

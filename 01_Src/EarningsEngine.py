@@ -68,6 +68,8 @@ def get_net_income (stock, ticker, reporting_period='TTM'):
     Returns:
         net_income (float): The net income for the specified reporting period.
 
+    Raises:
+        ValueError: If required Net Income data is missing or insufficient for the requested period.
     """
     
     net_income = None
@@ -139,7 +141,10 @@ def get_earnings (stock, ticker, earnings_type, earnings_period_req, av_api_key,
 
         Returns:
             - list: A list of Earnings data (EPS or Net Income) fetched from Yahoo Finance or Alpha Vantage
-    
+
+        Raises:
+            NetIncomeCalcError: If annual income statement data is missing or Net Income is not found.
+            EPSCalcError: If EPS data is missing or insufficient.
     """
 
     try:
@@ -330,6 +335,9 @@ def calc_eps_ttm (stock, ticker, trailing_eps_quarters=4):
 
     Returns:
         - float: The trailing 12-month EPS value, or None if data is insufficient or unavailable.
+
+    Raises:
+        EPSCalcError: If EPS data is missing or insufficient for the requested quarters.
     """
     
     o_trailing_eps = 0
@@ -385,6 +393,9 @@ def calc_evar (ticker, earnings_growths_yoy):
     
     Returns:
         - float: The calculated Earnings Variability (EVAR) in fractions.
+
+    Raises:
+        EVARCalcError: If earnings growth data is missing, insufficient, or calculation fails.
     """
 
     EARNINGS_GROWTH_MIN_DATA_POINTS = 2
@@ -451,6 +462,9 @@ def calc_earnings_growth (ticker, earnings_list):
 
     Returns:
         - list: A list of Earnings Growth YoY values for a specified earnings period.
+
+    Raises:
+        EarningsGrowthCalcError: If earnings data is missing, insufficient, or calculation fails.
     """
 
     # Initialize the list to hold the calculated Earnings Growth YoY values

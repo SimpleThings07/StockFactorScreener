@@ -52,7 +52,10 @@ from ZScoreCalculator import (
 from EarningsEngine import (
     calc_evar,
     calc_earnings_growth,
-    get_earnings
+    get_earnings,
+    NetIncomeCalcError,
+    EPSCalcError,
+    EarningsGrowthCalcError
 )
 
 
@@ -76,13 +79,13 @@ class __ProgramInfo__:
     minorVersion : str = "5"
     
     # PATCH: Incremented when backward compatible bug fixes are made. No new features are added. Some call this micro.
-    patchVersion : str = "6"
+    patchVersion : str = "7"
     
     # Build Date of the Application - Date Format: YYMMDD
     buildDate = datetime (
         year=2025,
         month=7,
-        day=4
+        day=6
     )
 
     # Complete Software Version - Major.Minor.Patch.BuildDate (yymmdd) -> e.g '1.0.0'
@@ -98,9 +101,7 @@ MAX_WORKERS = max (1, CPU_COUNT - 1)
 # ---------------------- Setup logging ----------------------
 
 SCRIPT_NAME = os.path.basename(__file__).replace('.py', '')
-
 SCRIPT_CONFIG_FILE = "ScreenerConfig.json"
-
 LOG_FILE = f"{SCRIPT_NAME}.log"
 LOG_CONFIG_FILE = "LoggingConfig.json"
 
@@ -119,7 +120,7 @@ def config_logging ( ):
 
 
     # Load Logging configuration
-    with open(LOG_CONFIG_FILE, "r", encoding='utf-8') as logging_config_file:
+    with open (LOG_CONFIG_FILE, "r", encoding='utf-8') as logging_config_file:
 
         logging_config = json.load(logging_config_file)
 
@@ -135,6 +136,7 @@ def config_logging ( ):
 
     # Return the currently used Log File Path
     return o_log_file_path
+
 
 
 # ---------------------- Helper Functions ----------------------
@@ -231,7 +233,7 @@ def get_ebit_to_tev (stock, ticker):
 
 
 
-def calc_profitability_growth (ticker, earnings_eps, gpoa_list, roe_list, roa_list, cfoa_list, gpmar_list):
+def calc_profitability_growth (ticker, eps_list, gpoa_list, roe_list, roa_list, cfoa_list, gpmar_list):
 
     growthMetrics = None
 
@@ -241,28 +243,59 @@ def calc_profitability_growth (ticker, earnings_eps, gpoa_list, roe_list, roa_li
 
         # Calculate the Compound Annual Growth Rate (CAGR) for each profitability metric
 
+
         # Calculate CAGR for EPS (Earnings Per Share)
-        eps_cagr = profitabilityCalc.calc_cagr(ticker, earnings_eps)
+        eps_cagr = None
+        try:
+            eps_cagr = profitabilityCalc.calc_cagr(ticker, eps_list)
+        except profitabilityCalc.CAGRCalcError as eps_cagr_error:
+            logging.error(f"Error calculating CAGR for EPS (Ticker: {ticker}): {eps_cagr_error}")
+            eps_cagr = None
 
 
         # Calculate CAGR for GPOA (Gross Profit over Assets)
-        gpoa_cagr = profitabilityCalc.calc_cagr(ticker, gpoa_list)
+        gpoa_cagr = None
+        try:
+            gpoa_cagr = profitabilityCalc.calc_cagr(ticker, gpoa_list)
+        except profitabilityCalc.CAGRCalcError as gpoa_cagr_error:
+            logging.error(f"Error calculating CAGR for GPOA (Ticker: {ticker}): {gpoa_cagr_error}")
+            gpoa_cagr = None
 
 
         # Calculate CAGR for ROE (Return on Equity)
-        roe_cagr = profitabilityCalc.calc_cagr(ticker, roe_list)
+        roe_cagr = None
+        try:
+            roe_cagr = profitabilityCalc.calc_cagr(ticker, roe_list)
+        except profitabilityCalc.CAGRCalcError as roe_cagr_error:
+            logging.error(f"Error calculating CAGR for ROE (Ticker: {ticker}): {roe_cagr_error}")
+            roe_cagr = None
 
 
         # Calculate CAGR for ROA (Return on Assets)
-        roa_cagr = profitabilityCalc.calc_cagr(ticker, roa_list)
+        roa_cagr = None
+        try:
+            roa_cagr = profitabilityCalc.calc_cagr(ticker, roa_list)
+        except profitabilityCalc.CAGRCalcError as roa_cagr_error:
+            logging.error(f"Error calculating CAGR for ROA (Ticker: {ticker}): {roa_cagr_error}")
+            roa_cagr = None
 
 
         # Calculate CAGR for CFOA (Cash Flow Over Assets)
-        cfoa_cagr = profitabilityCalc.calc_cagr(ticker, cfoa_list)
+        cfoa_cagr = None
+        try:
+            cfoa_cagr = profitabilityCalc.calc_cagr(ticker, cfoa_list)
+        except profitabilityCalc.CAGRCalcError as cfoa_cagr_error:
+            logging.error(f"Error calculating CAGR for CFOA (Ticker: {ticker}): {cfoa_cagr_error}")
+            cfoa_cagr = None
 
 
         # Calculate CAGR for GPMAR (Gross Profit Margin)
-        gpmar_cagr = profitabilityCalc.calc_cagr(ticker, gpmar_list)
+        gpmar_cagr = None
+        try:
+            gpmar_cagr = profitabilityCalc.calc_cagr(ticker, gpmar_list)
+        except profitabilityCalc.CAGRCalcError as gpmar_cagr_error:
+            logging.error(f"Error calculating CAGR for GPMAR (Ticker: {ticker}): {gpmar_cagr_error}")
+            gpmar_cagr = None
 
 
         growthMetrics = GrowthMetrics (
@@ -285,7 +318,7 @@ def calc_profitability_growth (ticker, earnings_eps, gpoa_list, roe_list, roa_li
 
 
 # Function to generate excel file name
-def generate_file_name(config):
+def generate_file_name (config):
 
     # Save the file to the 'gen' directory
     # If the directory does not exist, create it
@@ -433,53 +466,62 @@ def analyze_stock (config, stock, ticker, weight):
 
         # -------------- 1. Get Earnings (EPS) Data --------------
 
-        # 1.1 Get EPS data
-        earnings_eps = get_earnings (
-            stock,
-            ticker,
-            "eps",
-            config['Earnings_Period'],
-            config['AlphaVantage']['API_Key'],
-            config['AlphaVantage']['Base_URL'],
-        )
+        eps_list, eps_growth_list = None, None
+        try:
 
-        eps_latest_rnd = round (earnings_eps[0], 2) if earnings_eps is not None else None
-        if earnings_eps:
-            logging.info(f"Fetched Earnings data (EPS) for {len(earnings_eps)} years period (Ticker: {ticker}).")
-            logging.info(f"EPS (latest) (Ticker: {ticker}): {(eps_latest_rnd)}")
+            # 1.1 Get EPS data
+            eps_list = get_earnings (
+                stock,
+                ticker,
+                "eps",
+                config['Earnings_Period'],
+                config['AlphaVantage']['API_Key'],
+                config['AlphaVantage']['Base_URL'],
+            )
 
-        # 1.2 Calculate EPS Growth Year-on-Year (YoY) for each year
-        earnings_growths_eps = calc_earnings_growth (
-            ticker,
-            earnings_eps
-        )
+            eps_latest_rnd = round (eps_list[0], 2) if eps_list is not None else None
+            if eps_list:
+                logging.info(f"Fetched Earnings data (EPS) for {len(eps_list)} years period (Ticker: {ticker}).")
+                logging.info(f"EPS (latest) (Ticker: {ticker}): {(eps_latest_rnd)}")
+
+            # 1.2 Calculate EPS Growth Year-on-Year (YoY) for each year
+            eps_growth_list = calc_earnings_growth (
+                ticker,
+                eps_list
+            )
+
+        except Exception as e:
+            logging.error(f"Error fetching Earnings (EPS) for {ticker}: {e}")
+            eps_list = None
+            eps_growth_list = None
+
 
         # -------------- 2. Get Earnings (Net Income) Data --------------
-
-        earnings_net_income = None
+        net_income_list, net_income_growth_list = None, None
         try:
             # 2.1 Get Net Income data
-            earnings_net_income = profitabilityCalc.get_earnings (
+            net_income_list = profitabilityCalc.get_earnings (
                 stock,
                 ticker,
                 "net_income",
                 config['Earnings_Period'],
-                config['AlphaVantage']['API_Key'], 
-                config['AlphaVantage']['Base_URL'], 
+                config['AlphaVantage']['API_Key'],
+                config['AlphaVantage']['Base_URL'],
             )
 
-            if earnings_net_income:
-                logging.info(f"Fetched Earnings data (Net Income) for {len(earnings_net_income)} years period (Ticker: {ticker}).")
-        
-        except Exception as exc:
-            logging.error(f"Error fetching Earnings data (Net Income) for {ticker}: {exc}")
-            earnings_net_income = None
+            if net_income_list:
+                logging.info(f"Fetched Earnings data (Net Income) for {len(net_income_list)} years period (Ticker: {ticker}).")
 
-        # 2.2 Calculate Net Income Growth Year-on-Year (YoY) for each year
-        earnings_growths_net_income = calc_earnings_growth (
-            ticker,
-            earnings_net_income
-        )
+            # 2.2 Calculate Net Income Growth Year-on-Year (YoY) for each year
+            net_income_growth_list = calc_earnings_growth (
+                ticker,
+                net_income_list
+            )
+
+        except Exception as e:
+            logging.error(f"Error fetching Earnings (Net Income) for {ticker}: {e}")
+            net_income_list = None
+            net_income_growth_list = None
 
         # -------------- Calculate Earnings Variability (EVAR) --------------
 
@@ -490,64 +532,79 @@ def analyze_stock (config, stock, ticker, weight):
         evar_eps, evar_eps_perc = None, None
         try:
 
-            if earnings_growths_eps:
-                logging.info(f"Calculating Earnings Variability (EVAR) using EPS over {len(earnings_growths_eps)} year period (Ticker: {ticker}).")
+            if eps_growth_list:
+                logging.info(f"Calculating Earnings Variability (EVAR) using EPS over {len(eps_growth_list)} year period (Ticker: {ticker}).")
                 # Calculate EVAR using EPS
-                evar_eps = calc_evar (ticker, earnings_growths_eps)
+                evar_eps = calc_evar (ticker, eps_growth_list)
                 evar_eps_perc = round(evar_eps * 100, 2) if evar_eps is not None else "N/A"
 
-                if earnings_eps is not None:
-                    logging.info(f"EVAR {len(earnings_eps)}Y (EPS) (Ticker: {ticker}): {(evar_eps_perc)}%")
+                if eps_list is not None:
+                    logging.info(f"EVAR {len(eps_list)}Y (EPS) (Ticker: {ticker}): {(evar_eps_perc)}%")
                 else:
                     logging.info(f"EVAR (EPS) (Ticker: {ticker}): N/A")
 
             else:
                 logging.error(f"Cannot calculate EVAR (EPS) for {ticker}. No Earnings Growth data available.")
                 evar_eps = None
-                evar_eps_perc = "N/A"
+                evar_eps_perc = None
 
         except Exception as evar_error:
             logging.error(f"Error calculating EVAR (Ticker: {ticker}): {evar_error}")
             evar_eps = None
-            evar_eps_perc = "N/A"
+            evar_eps_perc = None
 
         evar_net_income, evar_net_income_perc = None, None
         try:
-            if earnings_growths_net_income:
-                logging.info(f"Calculating Earnings Variability (EVAR) using Net Income over {len(earnings_growths_net_income)} year period (Ticker: {ticker}).")
+            if net_income_growth_list:
+                logging.info(f"Calculating Earnings Variability (EVAR) using Net Income over {len(net_income_growth_list)} year period (Ticker: {ticker}).")
                 # Calculate EVAR using Net Income
-                evar_net_income = calc_evar (ticker, earnings_growths_net_income)
+                evar_net_income = calc_evar (ticker, net_income_growth_list)
                 evar_net_income_perc = round(evar_net_income * 100, 2) if evar_net_income is not None else "N/A"
-                if earnings_net_income is not None:
-                    logging.info(f"EVAR {len(earnings_net_income)}Y (Net Income) (Ticker: {ticker}): {(evar_net_income_perc)}%")
+                if net_income_list is not None:
+                    logging.info(f"EVAR {len(net_income_list)}Y (Net Income) (Ticker: {ticker}): {(evar_net_income_perc)}%")
                 else:
                     logging.info(f"EVAR (Net Income) (Ticker: {ticker}): N/A")
 
             else:
                 logging.error(f"Cannot calculate EVAR (Net Income) for {ticker}. No Earnings Growth data available.")
                 evar_net_income = None
-                evar_net_income_perc = "N/A"
+                evar_net_income_perc = None
 
         except Exception as evar_error:
             logging.error(f"Error calculating EVAR (Ticker: {ticker}): {evar_error}")
             evar_net_income = None
-            evar_net_income_perc = "N/A"
+            evar_net_income_perc = None
 
         # -------------- Compound Annual Growth Rate (CAGR) --------------
 
-        cagr_eps = profitabilityCalc.calc_cagr (ticker, earnings_eps)
-        cagr_eps_perc = round(cagr_eps * 100, 2) if cagr_eps is not None else None
-        if cagr_eps_perc is not None:
-            logging.info(f"CAGR {len(earnings_eps)}Y (EPS) (Ticker: {ticker}): {cagr_eps_perc} %")
-        else:
-            logging.info(f"CAGR (EPS) (Ticker: {ticker}): N/A")
+        cagr_eps = None
+        try:
 
-        cagr_net_income = profitabilityCalc.calc_cagr(ticker, earnings_net_income)
-        cagr_net_income_perc = round(cagr_net_income * 100, 2) if cagr_net_income is not None else None
-        if cagr_net_income is not None:
-            logging.info(f"CAGR {len(earnings_net_income)}Y (Net Income) (Ticker: {ticker}): {cagr_net_income_perc} %")
-        else:
-            logging.info(f"CAGR (Net Income) (Ticker: {ticker}): N/A")
+            cagr_eps = profitabilityCalc.calc_cagr (ticker, eps_list)
+            cagr_eps_perc = round(cagr_eps * 100, 2) if cagr_eps is not None else None
+            if cagr_eps_perc is not None:
+                logging.info(f"CAGR {len(eps_list)}Y (EPS) (Ticker: {ticker}): {cagr_eps_perc} %")
+            else:
+                logging.info(f"CAGR (EPS) (Ticker: {ticker}): N/A")
+
+        except Exception as cagr_error:
+            logging.error(f"Error calculating CAGR (EPS) (Ticker: {ticker}): {cagr_error}")
+            cagr_eps = None
+
+
+        cagr_net_income = None
+        try:
+
+            cagr_net_income = profitabilityCalc.calc_cagr(ticker, net_income_list)
+            cagr_net_income_perc = round(cagr_net_income * 100, 2) if cagr_net_income is not None else None
+            if cagr_net_income is not None:
+                logging.info(f"CAGR {len(net_income_list)}Y (Net Income) (Ticker: {ticker}): {cagr_net_income_perc} %")
+            else:
+                logging.info(f"CAGR (Net Income) (Ticker: {ticker}): N/A")
+
+        except Exception as cagr_error:
+            logging.error(f"Error calculating CAGR (Net Income) (Ticker: {ticker}): {cagr_error}")
+            cagr_net_income = None
 
         # -------------- Dividend Yield Fetched Data --------------
 
@@ -576,7 +633,7 @@ def analyze_stock (config, stock, ticker, weight):
 
         roe_list = None
         try:
-            # Calculate ROE using Net Income and Shareholder's Equity 
+            # Calculate ROE using Net Income and Shareholder's Equity
             roe_list = profitabilityCalc.calc_roe (stock, ticker, config, config.get("Earnings_Period"))
 
         except profitabilityCalc.ROECalcError as roe_error:
@@ -598,16 +655,22 @@ def analyze_stock (config, stock, ticker, weight):
                 logging.info("ROE - Calc (Ticker: %s): N/A", ticker)
 
         except profitabilityCalc.ROECalcError as roe_error:
-            logging.error(f"Error calculating ROE (ttm) (Ticker: {ticker}): {roe_error}")
+            logging.error (f"Error calculating ROE (ttm) (Ticker: {ticker}): {roe_error}")
             roe_ttm = None
 
+        try:
 
-        roe_msci = profitabilityCalc.calc_roe_msci (stock, ticker)
-        roe_msci_perc = roe_msci * 100 if roe_msci is not None else None
-        if roe_msci_perc is not None:
-            logging.info(f"ROE - MSCI (Ticker: {ticker}): {round(roe_msci_perc, 2)} %")
-        else:
-            logging.info(f"ROE - MSCI (Ticker: {ticker}): N/A")
+            roe_msci = profitabilityCalc.calc_roe_msci (stock, ticker)
+
+            roe_msci_perc = roe_msci * 100 if roe_msci is not None else None
+            if roe_msci_perc is not None:
+                logging.info (f"ROE - MSCI (Ticker: {ticker}): {round(roe_msci_perc, 2)} %")
+            else:
+                logging.info (f"ROE - MSCI (Ticker: {ticker}): N/A")
+
+        except Exception as roe_error:
+
+            logging.error (f"Error calculating ROE - MSCI (Ticker: {ticker}): {roe_error}")
 
 
 
@@ -696,22 +759,32 @@ def analyze_stock (config, stock, ticker, weight):
         # TODO: Check the the GPOA is not N/A for the following stocks:
         #       ECG, AX, RDN
 
-        gpoa_list, gpmar_list, gpoa_latest_perc, gpmar_latest_perc = None, None, None, None
-        try:
 
-            gpoa_list, gpmar_list = profitabilityCalc.calc_gross_profit_metrics (config, stock, ticker, config.get("Earnings_Period"))
+        gpoa_list, gpoa_latest_perc = None, None
+        try:
+            # Calculate GPOA (Gross Profit over Assets) annual data
+            gpoa_list = profitabilityCalc.calc_gpoa_annual (stock, ticker, config, config.get("Earnings_Period"))
 
             gpoa_latest_perc = round(gpoa_list[0] * 100, 2) if gpoa_list is not None else None
             logging.info(f"GPOA (Ticker: {ticker}): {gpoa_latest_perc} %")
 
+        except Exception as gpoa_error:
+            logging.error(f"Error calculating GPOA (Ticker: {ticker}): {gpoa_error}")
+            gpoa_list = None
+            gpoa_latest_perc = None
+
+
+        gpmar_list, gpmar_latest_perc = None, None
+        try:
+            # Calculate GPMAR (Gross Profit Margin) anual data
+            gpmar_list = profitabilityCalc.calc_gpmar_annual (stock, ticker, config, config.get("Earnings_Period"))
+
             gpmar_latest_perc = round(gpmar_list[0] * 100, 2) if gpmar_list is not None else None
             logging.info(f"GPMAR (Ticker: {ticker}): {gpmar_latest_perc} %")
 
-        except profitabilityCalc.GPOACalcError as gpoa_error:
+        except Exception as gpoa_error:
             logging.error(f"Error calculating GPOA and GPMAR (Ticker: {ticker}): {gpoa_error}")
-            gpoa_list = None
             gpmar_list = None
-            gpoa_latest_perc = None
             gpmar_latest_perc = None
 
 
@@ -767,12 +840,32 @@ def analyze_stock (config, stock, ticker, weight):
         #       Diversification is the only free lunch in investing.
 
 
+        # -------------- Company Name --------------
+        # Extract the company name
+        company_name = stock.info.get("longName", "N/A")
+        # If the company name is not available, set it to "N/A"
+        if company_name is None or company_name == "":
+            company_name = "N/A"
+        # Log the company name
+        logging.info(f"Company: {company_name}")
+
+        # --------------- Company Country Of Origin ---------------
+        # Extract the country of origin
+        country = stock.info.get("country", "N/A")
+        # If the country is not available, set it to "N/A"
+        if country is None or country == "":
+            country = "N/A"
+        # Log the country of origin
+        logging.info(f"Country: {country}")
+
+
+
         # TODO: Calculate all Profitability Metrics using TTM data, and not latest year data
 
         # -------------- Profitability Metrics --------------
         profitability_metrics = ProfitabilityMetrics (
             ticker,
-            earnings_growths_eps,      # EPS Growth last year
+            eps_growth_list,      # EPS Growth last year
             evar_eps,                  # EPS Variability last year
             gpoa_ttm,                  # Gross Profit over Assets (GPOA) TTM
             gpmar_ttm,                 # Gross Profit Margin (GPMAR) TTM
@@ -784,7 +877,7 @@ def analyze_stock (config, stock, ticker, weight):
 
 
         # --------------  Profitability Growth Metrics --------------
-        # earnings_growths_eps
+        # eps_growth_list
         # gpoa_growth
         # roe_growth      
         # roa_growth  
@@ -792,7 +885,7 @@ def analyze_stock (config, stock, ticker, weight):
         # gpmar_growth
         profitability_growth_metrics = calc_profitability_growth (
             ticker,
-            earnings_eps,                 # Five-year growth in Earnings per Share (EPS) - EPS Growth
+            eps_list,                 # Five-year growth in Earnings per Share (EPS) - EPS Growth
             gpoa_list,                    # Five-year growth in Gross Profits over Assets - GPOA Growth
             roe_list,                     # Five-year growth in Return on Equity - ROE Growth
             roa_list,                     # Five-year growth in Return on Assets - ROA Growth
@@ -814,19 +907,20 @@ def analyze_stock (config, stock, ticker, weight):
         # Build Stock Data Dictionary
         stock_data = STOCK_DATA_TEMPLATE.copy()
         stock_data.update({
-            "Company": stock.info.get("longName", "N/A"),
+            "Company": company_name,
+            "Country" : country,
             "Original Weight": weight,  # Add the original weight for the company
-            "Market Cap (in Billions)": market_cap_bill,
+            "Market Cap (in Billions)": round(market_cap_bill, 2),
             "P/E (Forward)": '{:,.2f}'.format(value_metrics.pe_forward) if value_metrics.pe_forward is not None else "N/A",
             "P/E (Trailing)":  '{:,.2f}'.format(value_metrics.pe_trailing) if value_metrics.pe_trailing is not None else "N/A",
             "EBIT/TEV (%)": '{:,.2f}'.format(round(value_metrics.ebit_to_tev * 100, 2)) if value_metrics.ebit_to_tev is not None else "N/A",
             "TEV (in Billions)": '{:,.2f}'.format(round(value_metrics.enterprise_value_bill, 2)) if value_metrics.enterprise_value_bill is not None else "N/A",
             "P/B": '{:,.2f}'.format(round(value_metrics.pb_ratio, 2)) if value_metrics.pb_ratio is not None else "N/A",
-            "EPS (latest)": '{:,.2f}'.format(eps_latest_rnd) if eps_latest_rnd is not None else "N/A",
+            "EPS (latest)": '{:,.2f}'.format( round (eps_list[0], 2) ) if eps_list is not None else "N/A",
             "EVAR - EPS (%)":"{}".format(evar_eps_perc),
             "EVAR - Net Income (%)":"{}".format(evar_net_income_perc),
-            "CAGR - EPS (%)": '{:,.2f}'.format(cagr_eps_perc) if cagr_eps_perc is not None else "N/A",
-            "CAGR - Net Income (%)": '{:,.2f}'.format(cagr_net_income_perc) if cagr_net_income_perc is not None else "N/A",
+            "CAGR - EPS (%)": '{:,.2f}'.format(round(cagr_eps * 100, 2)) if cagr_eps is not None else "N/A",
+            "CAGR - Net Income (%)": '{:,.2f}'.format(round(cagr_net_income * 100, 2) ) if cagr_net_income is not None else "N/A",
             "Dividend Yield (%)": '{:,.2f}'.format(dividend_yield) if dividend_yield is not None else "N/A",     
             "ROE (ttm) - yFinance (%)": '{:,.2f}'.format(roe_ttm_yf_perc) if roe_ttm_yf_perc is not None else "N/A",
             "ROE (ttm) - Calc (%)": '{:,.2f}'.format(roe_calc_perc) if roe_calc_perc is not None else "N/A",

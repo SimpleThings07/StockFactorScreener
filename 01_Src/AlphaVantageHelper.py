@@ -45,6 +45,9 @@ def fetch_earnings_alpha_vantage (api_key, base_url, ticker, data_type="eps", ea
 
         Returns:
         - list: A list of annual earnings data (EPS or Net Income) fetched from Alpha Vantage.
+
+        Raises:
+            AlphaVantageError: If data is missing, API response is invalid, or request fails.
     """
 
     try:
@@ -223,6 +226,9 @@ def get_balance_sheet_alpha_vantage (api_key, base_url, ticker, balance_sheet_pe
 
         Returns:
             - list: A list of Balance Sheet data fetched from Alpha Vantage.
+
+        Raises:
+            AlphaVantageError: If data is missing, API response is invalid, or request fails.
     """
 
     try:
@@ -324,6 +330,9 @@ def get_income_statement_alpha_vantage (api_key, base_url, ticker, income_statem
 
         Returns:
             - list: A list of Income Statement data fetched from Alpha Vantage.
+
+        Raises:
+            AlphaVantageError: If data is missing, API response is invalid, or request fails.
     """
 
     try:
