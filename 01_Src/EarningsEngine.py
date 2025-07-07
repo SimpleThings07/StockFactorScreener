@@ -52,6 +52,55 @@ class EarningsGrowthCalcError(Exception):
         self.message = message
 
 
+
+# ---------------------- Earnings Class ----------------------
+
+class Earnings:
+
+    """
+    Class to hold Earnings data for a stock, including EPS and Net Income.
+    This class is used to store and manage earnings data for financial analysis and screening.
+    It includes attributes for Earnings per Share (EPS) and Net Income, along with their growth rates and variability.
+
+    Attributes:
+        - eps_list: List of Earnings per Share (EPS) annual values for different years.
+        - eps_growth_list: List of EPS growth values year-on-year.
+        - eps_evar: Earnings Variability (EVAR) for EPS, calculated as the standard deviation of EPS growth.
+        - eps_cagr: Compound Annual Growth Rate (CAGR) for EPS, calculated over the specified period.
+        - net_income_list: List of Net Income annual values for different years.
+        - net_income_growth_list: List of Net Income growth values year-on-year.
+        - net_income_evar: Earnings Variability (EVAR) for Net Income, calculated as the standard deviation of Net Income growth.
+        - net_income_cagr: Compound Annual Growth Rate (CAGR) for Net Income, calculated over the specified period.
+
+    """
+
+    # EPS data
+    eps_list = None
+    eps_growth_list = None
+    eps_evar = None
+    eps_cagr = None  # Compound Annual Growth Rate (CAGR) for EPS
+    # Net Income data
+    net_income_list = None
+    net_income_growth_list = None
+    net_income_evar = None
+    net_income_cagr = None  # Compound Annual Growth Rate (CAGR) for Net Income
+
+
+    def __init__(self, eps_list, eps_growth_list, eps_evar, eps_cagr, net_income_list, net_income_growth_list, net_income_evar, net_income_cagr ):
+        
+        # EPS data
+        self.eps_list = eps_list
+        self.eps_growth_list = eps_growth_list
+        self.eps_evar = eps_evar
+        self.eps_cagr = eps_cagr  # Compound Annual Growth Rate (CAGR) for EPS
+
+        # Net Income data
+        self.net_income_list = net_income_list
+        self.net_income_growth_list = net_income_growth_list
+        self.net_income_evar = net_income_evar
+        self.net_income_cagr = net_income_cagr  # Compound Annual Growth Rate (CAGR) for Net Income
+
+
 # ---------------------- Function definitions ----------------------
 
 def get_net_income (stock, ticker, reporting_period='TTM'):

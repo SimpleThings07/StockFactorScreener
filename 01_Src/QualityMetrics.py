@@ -8,6 +8,8 @@
 # and should not be considered as investment advice.
 # Use at your own risk.
 
+from EarningsEngine import Earnings
+
 
 # ---------------------- Classes for Quality Metrics ----------------------
 
@@ -106,8 +108,7 @@ class ValueMetrics:
 class ProfitabilityMetrics:
 
     ticker = None
-    earnings_growth = None
-    earnings_variability = None
+    earnings = None
     gpoa_ttm = None
     gpmar_ttm = None
     roe_ttm = None
@@ -115,21 +116,14 @@ class ProfitabilityMetrics:
     cfoa = None
     accruals = None
 
-    def __init__(self, ticker : str, earnings_growth : list, earnings_variability : float, gpoa : float, gpmar : float , roe : float, roa : float, cfoa : list, accruals):
+    def __init__(self, ticker : str, earnings : Earnings, gpoa : float, gpmar : float , roe : float, roa : float, cfoa : list, accruals):
         
         self.ticker = ticker
     
         # Profitability metrics include gross profit, margins, return on equity, return on assets,
         # cash flow over assets, and accruals
 
-        # Earnings growth (CAGR) last year
-        if earnings_growth:
-            self.earnings_growth = earnings_growth[0]              # Earnings growth (CAGR) last year
-        else:
-            self.earnings_growth = None
-
-        # Earnings variability (EVAR)
-        self.earnings_variability = earnings_variability           # Earnings variability (EVAR) last year
+        self.earnings = earnings            # Earnings data object containing EPS, Net Income, and growth rates
 
         # Profitability metrics as described in Asness, Frazzini, and Pedersen (2014)
         self.gpoa_ttm = gpoa            # Gross profits over assets (GPOA) as TTM ++

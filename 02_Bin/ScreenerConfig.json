@@ -1483,10 +1483,6 @@
         {
           "ticker": "IGM.TO",
           "weight": 0.01
-        },
-        {
-          "ticker": "ILS",
-          "weight": 0.01
         }
 
   ]
