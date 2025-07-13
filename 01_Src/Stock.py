@@ -8,13 +8,31 @@
 # and should not be considered as investment advice.
 # Use at your own risk.
 
+from typing import Optional
 
 class Stock():
-    def __init__( self, ticker, sector, value_metrics, profitability_metrics, growth_metrics, safety_metrics ):
 
-        self.ticker = ticker                                # Stock ticker symbol
-        self.sector = sector                                # Sector of the stock (e.g., Technology, Healthcare, Financial Services, Industrials, etc.)
-        self.value_metrics = value_metrics                  # Value metrics (P/B, P/E, etc.)
-        self.profitability_metrics = profitability_metrics  # Profitability metrics
-        self.growth_metrics = growth_metrics                # Profitability Growth metrics
-        self.safety_metrics = safety_metrics                # Safety metrics
+    def __init__(
+        self,
+        ticker: str,
+        sector: str,
+        value_metrics: object,
+        profitability_metrics: object,
+        growth_metrics: object,
+        safety_metrics: object
+    ):
+
+        # Stock attributes
+        self.ticker: str = ticker                                               # Stock ticker symbol
+        self.sector: str = sector                                               # Sector of the stock (e.g., Technology, Healthcare, Financial Services, Industrials, etc.)
+
+        # Financial metrics
+        self.value_metrics: object = value_metrics                              # Value metrics (P/B, P/E, etc.)
+        self.profitability_metrics: object = profitability_metrics              # Profitability metrics
+        self.growth_metrics: object = growth_metrics                            # Profitability Growth metrics
+        self.safety_metrics: object = safety_metrics                            # Safety metrics
+
+        # Z-score results (will be set after calculation)
+        self.value_z_score_result: Optional["ZScoreResult"] = None              # Value Z-score result (will be set after calculation)
+        self.profitability_z_score_result: Optional["ZScoreResult"] = None      # Profitability Z-score result (will be set after calculation)
+        self.growth_z_score_result: Optional["ZScoreResult"] = None             # Growth Z-score result (will be set after calculation)

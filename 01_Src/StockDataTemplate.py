@@ -13,6 +13,7 @@
 
 STOCK_DATA_TEMPLATE = {
     "Company": None,
+    "Country": None,  # Added country field
     "Original Weight": None,
     "Market Cap (in Billions)": None,
     "P/E (Forward)": None,
@@ -20,6 +21,7 @@ STOCK_DATA_TEMPLATE = {
     "EBIT/TEV (%)": None,
     "TEV (in Billions)": None,
     "P/B": None,
+    "Z-Score Value": None,
     "EPS (latest)": None,
     "EVAR - EPS (%)": None,
     "EVAR - Net Income (%)": None,
@@ -41,6 +43,7 @@ STOCK_DATA_TEMPLATE = {
 
 INVALID_TICKER_TEMPLATE = {
     "Company": None,  # to be set to ticker
+    "Country": None,  # to be set to country
     "Original Weight": None,  # to be set to weight
     "Market Cap (in Billions)": "Invalid Ticker!",
     "P/E (Forward)": "N/A",
@@ -48,6 +51,7 @@ INVALID_TICKER_TEMPLATE = {
     "P/B": "N/A",
     "EBIT/TEV (%)": "N/A",
     "TEV (in Billions)": "N/A",
+    "Z-Score Value": "N/A",
     "EPS (latest)": "N/A",
     "EVAR - EPS (%)": "N/A",
     "EVAR - Net Income (%)": "N/A",

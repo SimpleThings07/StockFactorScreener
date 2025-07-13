@@ -52,6 +52,56 @@ class EarningsGrowthCalcError(Exception):
         self.message = message
 
 
+
+# ---------------------- Earnings Class ----------------------
+
+class Earnings:
+
+    """
+    Class to hold Earnings data for a stock, including EPS and Net Income.
+    This class is used to store and manage earnings data for financial analysis and screening.
+    It includes attributes for Earnings per Share (EPS) and Net Income, along with their growth rates and variability.
+
+    Attributes:
+        - eps_list: List of Earnings per Share (EPS) annual values for different years.
+        - eps_growth_list: List of EPS growth values year-on-year.
+        - eps_evar: Earnings Variability (EVAR) for EPS, calculated as the standard deviation of EPS growth.
+        - eps_cagr: Compound Annual Growth Rate (CAGR) for EPS, calculated over the specified period.
+        - net_income_list: List of Net Income annual values for different years.
+        - net_income_growth_list: List of Net Income growth values year-on-year.
+        - net_income_evar: Earnings Variability (EVAR) for Net Income, calculated as the standard deviation of Net Income growth.
+        - net_income_cagr: Compound Annual Growth Rate (CAGR) for Net Income, calculated over the specified period.
+
+    """
+
+    # EPS data
+    eps_list = None
+    eps_growth_list = None
+    eps_evar = None
+    eps_cagr = None  # Compound Annual Growth Rate (CAGR) for EPS
+
+    # Net Income data
+    net_income_list = None
+    net_income_growth_list = None
+    net_income_evar = None
+    net_income_cagr = None  # Compound Annual Growth Rate (CAGR) for Net Income
+
+
+    def __init__(self, eps_list, eps_growth_list, eps_evar, eps_cagr, net_income_list, net_income_growth_list, net_income_evar, net_income_cagr ):
+        
+        # EPS data
+        self.eps_list = eps_list
+        self.eps_growth_list = eps_growth_list
+        self.eps_evar = eps_evar
+        self.eps_cagr = eps_cagr  # Compound Annual Growth Rate (CAGR) for EPS
+
+        # Net Income data
+        self.net_income_list = net_income_list
+        self.net_income_growth_list = net_income_growth_list
+        self.net_income_evar = net_income_evar
+        self.net_income_cagr = net_income_cagr  # Compound Annual Growth Rate (CAGR) for Net Income
+
+
 # ---------------------- Function definitions ----------------------
 
 def get_net_income (stock, ticker, reporting_period='TTM'):
@@ -68,6 +118,8 @@ def get_net_income (stock, ticker, reporting_period='TTM'):
     Returns:
         net_income (float): The net income for the specified reporting period.
 
+    Raises:
+        ValueError: If required Net Income data is missing or insufficient for the requested period.
     """
     
     net_income = None
@@ -139,7 +191,10 @@ def get_earnings (stock, ticker, earnings_type, earnings_period_req, av_api_key,
 
         Returns:
             - list: A list of Earnings data (EPS or Net Income) fetched from Yahoo Finance or Alpha Vantage
-    
+
+        Raises:
+            NetIncomeCalcError: If annual income statement data is missing or Net Income is not found.
+            EPSCalcError: If EPS data is missing or insufficient.
     """
 
     try:
@@ -330,6 +385,9 @@ def calc_eps_ttm (stock, ticker, trailing_eps_quarters=4):
 
     Returns:
         - float: The trailing 12-month EPS value, or None if data is insufficient or unavailable.
+
+    Raises:
+        EPSCalcError: If EPS data is missing or insufficient for the requested quarters.
     """
     
     o_trailing_eps = 0
@@ -385,6 +443,9 @@ def calc_evar (ticker, earnings_growths_yoy):
     
     Returns:
         - float: The calculated Earnings Variability (EVAR) in fractions.
+
+    Raises:
+        EVARCalcError: If earnings growth data is missing, insufficient, or calculation fails.
     """
 
     EARNINGS_GROWTH_MIN_DATA_POINTS = 2
@@ -451,6 +512,9 @@ def calc_earnings_growth (ticker, earnings_list):
 
     Returns:
         - list: A list of Earnings Growth YoY values for a specified earnings period.
+
+    Raises:
+        EarningsGrowthCalcError: If earnings data is missing, insufficient, or calculation fails.
     """
 
     # Initialize the list to hold the calculated Earnings Growth YoY values
