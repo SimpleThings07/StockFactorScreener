@@ -17,6 +17,7 @@ import logging
 import logging.config
 from dataclasses import dataclass    # Data Class
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import math
 
 # Time and Date Modules
 import time
@@ -42,12 +43,18 @@ from ValueMetrics import (
 )
 from Stock import Stock
 import ProfitabilityCalculator as profitabilityCalc
+from ProfitabilityCalculator import (
+    ROE,
+    ROA
+)
 from StockDataTemplate import STOCK_DATA_TEMPLATE, INVALID_TICKER_TEMPLATE
 from ZScoreCalculator import (
     calc_value_z_scores,
     calc_profitability_z_scores,
     calc_growth_z_scores,
 )
+
+import MetricSelector as metricSelector
 
 from EarningsEngine import (
     calc_evar,
@@ -58,7 +65,6 @@ from EarningsEngine import (
     EarningsGrowthCalcError,
     Earnings
 )
-
 
 
 # ---------------------- Script Configuration ----------------------
@@ -77,16 +83,16 @@ class __ProgramInfo__:
 
     # MINOR: Incremented when new functionality is added in a backward compatible manner. It's safe to update to a new minor version
     #        without requiring code changes. Code changes are needed only to make use of the new features.
-    minorVersion : str = "5"
+    minorVersion : str = "6"
     
     # PATCH: Incremented when backward compatible bug fixes are made. No new features are added. Some call this micro.
-    patchVersion : str = "8"
+    patchVersion : str = "0"
     
     # Build Date of the Application - Date Format: YYMMDD
     buildDate = datetime (
         year=2025,
         month=7,
-        day=7
+        day=13
     )
 
     # Complete Software Version - Major.Minor.Patch.BuildDate (yymmdd) -> e.g '1.0.0'
@@ -226,8 +232,6 @@ def get_ebit_to_tev (stock, ticker):
         # Just log the exception message without the stack trace
         # This is useful for debugging purposes, but can be removed in production code
         # If you want to log the stack trace, you can use logging.exception(ex)
-        if logging.getLogger().isEnabledFor(logging.DEBUG):
-            logging.exception(ex)
         return None, None
 
     return ebit_to_tev_ratio, enterprise_value
@@ -336,6 +340,8 @@ def generate_file_name (config):
     FILE_BASE_NAME = config['Output_Excel_Filename']
 
     # Get the current date
+
+    # Get the current date
     date_str = datetime.now().strftime("%Y-%m-%d")
 
     # Generate the final file name using the gen directory, and the date
@@ -352,7 +358,7 @@ def generate_file_name (config):
 
 
 # Function to save data to excel file
-def save_to_excel (stock_data, tickers_and_weights, config):
+def save_to_excel (stock_data, stock_factor_metrics_list, tickers_and_weights, config):
 
     # Generate the file name with today's date
     file_name = generate_file_name (config)
@@ -362,6 +368,19 @@ def save_to_excel (stock_data, tickers_and_weights, config):
     for ticker_data in tickers_and_weights:
         ticker_current = ticker_data["ticker"] if isinstance(ticker_data, dict) else ticker_data[0]
         if ticker_current in stock_data:
+
+            # Find the corresponding Stock object
+            stock_obj = next((stock for stock in stock_factor_metrics_list if stock.ticker == ticker_current), None)
+            if stock_obj and stock_obj.value_z_score_result:
+                composite_score = stock_obj.value_z_score_result.composite
+            else:
+                composite_score = "N/A"
+            # Add composite score to the output dictionary
+            stock_data[ticker_current]["Value Composite Z-Score"] = (
+                '{:,.2f}'.format(composite_score) if composite_score is not None and not isinstance(composite_score, str) and not math.isnan(composite_score) else "N/A"
+            )
+
+            # Add the stock object to the stock_data dictionary
             ordered_stock_data[ticker_current] = stock_data[ticker_current]
 
     # Convert the data to a pandas DataFrame
@@ -524,7 +543,7 @@ def calc_earnings_metrics (stock, ticker, config):
             eps_evar_perc = round (eps_evar * 100, 2) if eps_evar is not None else "N/A"
 
             if eps_list is not None:
-                logging.info(f"EVAR {len(eps_list)}Y (EPS) (Ticker: {ticker}): {(eps_evar_perc)}%")
+                logging.info(f"EVAR {len(eps_list)}Y (EPS) (Ticker: {ticker}): {(eps_evar_perc)} %")
             else:
                 logging.info(f"EVAR (EPS) (Ticker: {ticker}): N/A")
 
@@ -546,7 +565,7 @@ def calc_earnings_metrics (stock, ticker, config):
             net_income_evar = calc_evar (ticker, net_income_growth_list)
             net_income_evar_perc = round (net_income_evar * 100, 2) if net_income_evar is not None else "N/A"
             if net_income_list is not None:
-                logging.info(f"EVAR {len(net_income_list)}Y (Net Income) (Ticker: {ticker}): {(net_income_evar_perc)}%")
+                logging.info(f"EVAR {len(net_income_list)}Y (Net Income) (Ticker: {ticker}): {(net_income_evar_perc)} %")
             else:
                 logging.info(f"EVAR (Net Income) (Ticker: {ticker}): N/A")
 
@@ -606,8 +625,8 @@ def calc_earnings_metrics (stock, ticker, config):
         net_income_cagr
     )
 
-
     return earnings_data
+
 
 
 def analyze_stock (config, stock, ticker, weight):
@@ -641,7 +660,6 @@ def analyze_stock (config, stock, ticker, weight):
         ###################   VALUE METRICS   ##################
         ########################################################
 
-        value_metrics = None
         value_metrics = calc_value_metrics (
             stock,
             ticker
@@ -688,12 +706,11 @@ def analyze_stock (config, stock, ticker, weight):
             roe_list = profitabilityCalc.calc_roe (stock, ticker, config, config.get("Earnings_Period"))
 
         except profitabilityCalc.ROECalcError as roe_error:
-            logging.error(f"Error calculating ROE (Ticker: {ticker}): {roe_error}")
+            logging.error (f"Error calculating ROE (Ticker: {ticker}): {roe_error}")
             roe_list = None
 
-
-        roe_ttm = None
-        roe_calc_perc = None
+        # -------------- Return on Equity - Calculated --------------
+        roe_ttm_calc, roe_calc_perc = None, None
         try:
             # Get the TTM ROE
             roe_ttm = profitabilityCalc.calc_roe_ttm ( stock, ticker )
@@ -709,6 +726,8 @@ def analyze_stock (config, stock, ticker, weight):
             logging.error (f"Error calculating ROE (ttm) (Ticker: {ticker}): {roe_error}")
             roe_ttm = None
 
+        # -------------- Return on Equity - MSCI --------------
+        roe_msci = None
         try:
 
             roe_msci = profitabilityCalc.calc_roe_msci (stock, ticker)
@@ -722,6 +741,15 @@ def analyze_stock (config, stock, ticker, weight):
         except Exception as roe_error:
 
             logging.error (f"Error calculating ROE - MSCI (Ticker: {ticker}): {roe_error}")
+
+        roe_data = ROE (
+            roe_ttm_yf,
+            roe_ttm_calc,
+            roe_list,
+            roe_msci,
+        )
+
+        roe_selected = metricSelector.select_roe ( roe_data )
 
 
 
@@ -757,6 +785,23 @@ def analyze_stock (config, stock, ticker, weight):
             logging.info(f"ROA (ttm) (Yahoo Finance) (Ticker: {ticker}): N/A")
 
 
+        # Calculate ROA TTM
+        roa_ttm_calc = None
+        try:
+            roa_ttm_calc = profitabilityCalc.calc_roa_ttm ( stock, ticker )
+
+            # If the ROA TTM is not None, convert it to percentage
+            roa_ttm_calc_perc = roa_ttm_calc * 100 if roa_ttm_calc is not None else None
+            if roa_ttm_calc_perc is not None:
+                logging.info("ROA - Calc (Ticker: %s): %.2f %%", ticker, round(roa_ttm_calc_perc, 2))
+            else:
+                logging.info("ROA - Calc (Ticker: %s): N/A", ticker)
+
+        except profitabilityCalc.ROACalcError as roa_error:
+            logging.error(f"Error calculating ROA (ttm) (Ticker: {ticker}): {roa_error}")
+            roa_ttm_calc = None
+
+
         roa_list, roa_calc_perc = None, None
         try:
             # Calculate ROA using Net Income and Total Assets
@@ -778,8 +823,17 @@ def analyze_stock (config, stock, ticker, weight):
             roa_list = None
             roa_calc_perc = None
 
+        roa = ROA (
+            roa_ttm_yf,
+            roa_ttm_calc,
+            roa_list
+        )
+
+        roa_selected = metricSelector.select_roa ( roa )
+
 
         # -------------- Cash Flow Over Assets (CFOA) --------------
+
         cfoa_list, cfoa_latest_perc = None, None
         try:
             cfoa_list = profitabilityCalc.calc_cfoa (stock, ticker)
@@ -804,8 +858,12 @@ def analyze_stock (config, stock, ticker, weight):
             cfoa_ttm_perc = None
 
 
-        # --------------   Gross Profits Over Assets (GPOA)
-        #                & Gross Profit Margin (GPMAR)  --------------
+        cfoa_selected = metricSelector.select_cfoa (
+            cfoa_ttm,
+            cfoa_list
+        )
+
+        # --------------   Gross Profits Over Assets (GPOA) --------------
  
         # TODO: Check the the GPOA is not N/A for the following stocks:
         #       ECG, AX, RDN
@@ -825,6 +883,27 @@ def analyze_stock (config, stock, ticker, weight):
             gpoa_latest_perc = None
 
 
+        gpoa_ttm, gpoa_ttm_perc = None, None
+        try:
+
+            # Calculate GPOA
+            gpoa_ttm = profitabilityCalc.calc_gpoa_ttm ( stock, ticker )
+            # Convert GPOA to percentage
+            gpoa_ttm_perc = round(gpoa_ttm * 100, 2) if gpoa_ttm is not None else None
+
+        except profitabilityCalc.GPOACalcError as gpoa_error:
+            logging.error(f"Error calculating GPOA and GPMAR TTM (Ticker: {ticker}): {gpoa_error}")
+            gpoa_ttm = None
+
+
+        gpoa_selected = metricSelector.select_gpoa (
+            gpoa_ttm,
+            gpoa_list
+        )
+
+
+        # --------------   Gross Profit Margin (GPMAR)      --------------
+
         gpmar_list, gpmar_latest_perc = None, None
         try:
             # Calculate GPMAR (Gross Profit Margin) anual data
@@ -839,28 +918,25 @@ def analyze_stock (config, stock, ticker, weight):
             gpmar_latest_perc = None
 
 
-        gpoa_ttm_perc, gpmar_ttm_perc, gpmar_ttm, gpoa_ttm = None, None, None, None
+        gpmar_ttm, gpmar_ttm_perc = None, None
         try:
-
-            # Calculate GPOA
-            gpoa_ttm = profitabilityCalc.calc_gpoa_ttm ( stock, ticker )
-            # Convert GPOA to percentage
-            gpoa_ttm_perc = round(gpoa_ttm * 100, 2) if gpoa_ttm is not None else None
-
-            # Calculate GPMAR
+            # Calculate GPMAR TTM
             gpmar_ttm =  profitabilityCalc.calc_gpmar_ttm ( stock, ticker )
             # Convert GPMAR to percentage
             gpmar_ttm_perc = round(gpmar_ttm * 100, 2) if gpmar_ttm is not None else None
-
-        except profitabilityCalc.GPOACalcError as gpoa_error:
-            logging.error(f"Error calculating GPOA and GPMAR TTM (Ticker: {ticker}): {gpoa_error}")
-            gpoa_ttm = None
-
         except profitabilityCalc.GPMARCalcError as gpmar_error:
             logging.error(f"Error calculating GPMAR TTM (Ticker: {ticker}): {gpmar_error}")
             gpmar_ttm = None
 
+
+        gpmar_selected = metricSelector.select_gpmar (
+            gpmar_ttm,
+            gpmar_list
+        )
+
+
         # -------------- Profit Margin --------------
+
         # Safe multiplication to handle None values, Convert to percentage
         profit_margin = stock.info.get("profitMargins", None)
         profit_margin_percent = profit_margin * 100 if profit_margin is not None else None
@@ -897,11 +973,11 @@ def analyze_stock (config, stock, ticker, weight):
         profitability_metrics = ProfitabilityMetrics (
             ticker,
             earnings,                  # Earnings data
-            gpoa_ttm,                  # Gross Profit over Assets (GPOA) TTM
-            gpmar_ttm,                 # Gross Profit Margin (GPMAR) TTM
-            roe_ttm_yf,                # Return on Equity (ROE) TTM
-            roa_ttm_yf,                # Return on Assets (ROA) TTM
-            cfoa_list,                 # Cash Flow over Assets (CFOA) last year
+            gpoa_selected,             # Gross Profit over Assets (GPOA)
+            gpmar_selected,            # Gross Profit Margin (GPMAR)
+            roe_selected,              # Return on Equity (ROE) TTM
+            roa_selected,              # Return on Assets (ROA) TTM
+            cfoa_selected,             # Cash Flow over Assets (CFOA) last year
             None                       # Accruals None
         )
 
@@ -1106,7 +1182,27 @@ if __name__ == "__main__":
         growth_cfg = config.get("GrowthFactor", None)
 
         # Calculate Z-scores for each factor
-        #value_z  = calc_value_z_scores (stock_factor_metrics_list, value_cfg)
+
+        ####### Value Factor Z-Scores Calculation #######
+
+        # TODO: We might not have to return, as the function modifies the input parameter (stock list) itself ?
+        value_zscore  = calc_value_z_scores (
+            stock_factor_metrics_list,
+            value_cfg ["z_score_metrics"]
+        )
+        # After Z-score calculation, update each stock's data dictionary
+        for stock in stock_factor_metrics_list:
+            ticker = stock.ticker
+            if ticker in stock_data:
+                composite_score = stock.value_z_score_result.composite if stock.value_z_score_result else None
+                stock_data[ticker]["Z-Score Value"] = (
+                    '{:,.2f}'.format(composite_score) if composite_score is not None and not isinstance(composite_score, str) and not math.isnan(composite_score) else "N/A"
+                )
+
+        ####### Value Factor Z-Scores Calculation #######
+
+        # TODO: Calculate Debt to Equity Ratio for profitability metrics
+        # TODO: Calculate Accruals for profitability metrics
         #profit_z = calc_profitability_z_scores (stock_factor_metrics_list, profitability_cfg)
         #growth_z = calc_growth_z_scores (stock_factor_metrics_list, growth_cfg)
 
@@ -1122,6 +1218,7 @@ if __name__ == "__main__":
         # Save the stock data to an Excel file
         save_to_excel (
             stock_data,
+            stock_factor_metrics_list,
             tickers_and_weights,
             config
         )

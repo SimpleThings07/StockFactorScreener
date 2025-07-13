@@ -54,7 +54,6 @@ class GPOACalcError(Exception):
         super().__init__(message)
         self.message = message
 
-
 class GPMARCalcError(Exception):
     """
         Custom exception for errors in Gross Profit Margin (GPMAR) calculation.
@@ -86,6 +85,32 @@ class CAGRCalcError(Exception):
     def __init__(self, message):
         super().__init__(message)
         self.message = message
+
+
+
+# ---------------------- Data Classes ----------------------
+
+# Return on Equity (ROE) class containing ROE related data
+class ROE:
+    """
+        Class for storing Return on Equity (ROE) related data.
+    """
+
+    def __init__(self, roe_ttm_yf, roe_ttm_calc, roe_annual_list, roe_msci):
+        self.ttm_yf = roe_ttm_yf
+        self.ttm_calc = roe_ttm_calc
+        self.annual_list = roe_annual_list
+        self.msci = roe_msci
+
+# Return on Assets (ROA) class containing ROA related data
+class ROA:
+    """
+        Class for storing Return on Assets (ROA) related data.
+    """
+    def __init__(self, roa_ttm_yf, roa_ttm_calc, roa_annual_list):
+        self.ttm_yf = roa_ttm_yf
+        self.ttm_calc = roa_ttm_calc
+        self.annual_list = roa_annual_list
 
 
 # ---------------------- Function definitions ----------------------
@@ -447,6 +472,95 @@ def calc_roa (stock, ticker, config, years=4):
 
     except Exception as ex:
         raise ROACalcError(f"Unexpected error during ROE calculation for Ticker {ticker}! Error: {ex}") from ex
+
+
+
+def calc_roa_ttm (stock, ticker):
+    """
+        Calculate Return on Assets (ROA) using Net Income and Total Assets with TTM data.
+
+            ROA = Net Income / Total Assets
+
+        Parameters:
+            - stock (yf.Ticker): A yfinance Ticker object representing the stock.
+            - ticker (str): The stock ticker symbol.
+
+        Returns:
+            - float: The calculated Return on Assets (ROA) TTM, or None if data is missing. Calculated as a fraction.
+
+        Raises:
+            ROACalcError: If required data is missing, dates do not match, or division by zero occurs.
+    """
+
+    roa_ttm = None
+
+    try:
+
+        # -------------- 1. Get Net Income  --------------
+
+        net_income_ttm = get_net_income (
+            stock,
+            ticker,
+            'ttm'     # Use TTM (Trailing Twelve Months) for Net Income
+        )
+
+
+        # If Net Income is not available, raise exception to indicate missing data
+        if net_income_ttm is None:
+            raise ROACalcError (f"Cannot calculate ROA TTM (Ticker: {ticker}): Data for Net Income is missing")
+
+
+        # -------------- 2. Get Total Assets from Balance Sheet --------------
+
+        # Fetch Total Assets from the balance sheet (quarterly data)
+        balance_sheet = stock.quarterly_balance_sheet.T  # Transpose to have dates as rows
+
+        # Get "Total Assets" from the balance sheet data
+        total_assets_list = balance_sheet['Total Assets'].tolist()   # Convert to list for easier indexing
+
+        # If Total Assets is not available, log a warning and set ROA as None
+        if total_assets_list is None:
+            raise ROACalcError(f"Cannot calculate ROA TTM (Ticker: {ticker}): Data for Total Assets is missing")
+        
+
+        # Remove all NaN values from the Total Assets list
+        total_assets_list = [assets for assets in total_assets_list if not pd.isna(assets)]
+        
+        # Check if we have at least 1 year of quarerly data
+        
+
+        # If your numerator is the trailing-twelve-month (TTM) net income ending in the most-recent quarter q, the cleanest book-ends for assets are:
+        #   Beginning-of-period assets – the balance-sheet at q-4 (one year ago)
+        #   End-of-period assets – the balance-sheet at q (now)
+        #
+        # Taking the simple average of those two asset values gives you the capital that supported the earnings for the full 12-month window.
+        #
+        # ROA(TTM)  =       Net-income_TTM
+        #             ────────────────────────────
+        #               (Assets_q-4 + Assets_q-3 + Assets_q-2  +  Assets_q-1) ÷ 4
+
+        # Check if we have at least 4 quarters of data for TTM calculation
+        if len(total_assets_list) < 4:
+            # Raise exception to indicate missing data
+            raise ROACalcError(f"Cannot calculate ROA TTM (Ticker: {ticker}): Not enough Total Assets quarterly data is available. \n Data for at least 5 quarters is required.")
+
+
+        # Calculate TTM Total Assets as the average of the latest four quarters of Total Assets data
+        total_assets_avg = sum (total_assets_list[:4]) / 4
+
+        # Is total ssets average zero?
+        if total_assets_avg <= 0:
+            raise ROACalcError (f"Cannot calculate ROA TTM (Ticker: {ticker}): Total Assets average is zero or negative. \n Total Assets average: {total_assets_avg}.")
+
+
+        # -------------- 3. Calculate ROA TTM --------------
+        # Calculate ROA TTM
+        roa_ttm = net_income_ttm / total_assets_avg
+
+        return roa_ttm
+
+    except Exception as ex:
+        raise ROACalcError (f"Cannot calculate ROA TTM (Ticker: {ticker}): An error occurred: {ex}") from ex
 
 
 

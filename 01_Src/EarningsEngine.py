@@ -79,6 +79,7 @@ class Earnings:
     eps_growth_list = None
     eps_evar = None
     eps_cagr = None  # Compound Annual Growth Rate (CAGR) for EPS
+
     # Net Income data
     net_income_list = None
     net_income_growth_list = None

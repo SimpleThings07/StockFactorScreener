@@ -34,6 +34,8 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Callable, Any
 import math
 import numpy as np
+from Stock import Stock
+
 
 
 # ---------------------------------------------------------------------------
@@ -41,29 +43,49 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 def _nan_safe(value: Any) -> float:
-    """Convert *None*, *math.nan* or non‑numerics to *np.nan* – else cast to *float*."""
+    """Convert *None*, *math.nan* or non-numerics to *np.nan* - else cast to *float*."""
     try:
         return np.nan if value is None or math.isnan(float(value)) else float(value)
     except (ValueError, TypeError):
         return np.nan
 
 
-def _zscore(column: np.ndarray) -> np.ndarray:
-    """Classic population z‑score with **nan** handling.
-
-    If the column has fewer than 2 valid observations or zero std, returns an
-    array of *np.nan* so the composite mean can just ignore it.
+def calc_zscore (column: np.ndarray) -> np.ndarray:
     """
-    mask = ~np.isnan(column)
+    Compute the z-score (standard score) for a 1D numpy array, handling NaNs robustly.
+
+    Z-score is calculated as:
+        z = (x - mean) / std
+    where mean and std are computed ignoring NaNs.
+
+    Special handling:
+    - If fewer than 2 valid (non-NaN) values are present, returns an array of NaNs (cannot compute z-score).
+    - If the standard deviation is zero (all values are the same), returns an array of NaNs (no variation).
+    - NaN values in the input remain NaN in the output.
+
+    Parameters:
+        column (np.ndarray): 1D array of values (may contain NaNs).
+
+    Returns:
+        np.ndarray: Array of z-scores, same shape as input, with NaNs preserved.
+    """
+    mask = ~np.isnan(column)  # Boolean mask for valid (non-NaN) entries
+    # Are there fewer than 2 valid (non-NaN) values ?
     if mask.sum() < 2:
+        # Not enough data to compute z-score
         return np.full_like(column, np.nan, dtype=float)
-    mu = column[mask].mean()
-    sigma = column[mask].std(ddof=0)
-    if sigma == 0:
+    
+    # Compute mean for valid entries
+    mean = column[mask].mean()  # Mean of valid entries
+    # Compute standard deviation for valid entries
+    stand_dev = column[mask].std(ddof=0)  # Population std of valid entries
+    # if the standard deviation is zero ?
+    if stand_dev == 0:
+        # No variation, z-score undefined
         return np.full_like(column, np.nan, dtype=float)
-    out = (column - mu) / sigma
-    out[~mask] = np.nan
-    return out
+    z_score = (column - mean) / stand_dev  # Standardize
+    z_score[~mask] = np.nan  # Preserve NaNs
+    return z_score
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +96,6 @@ def _zscore(column: np.ndarray) -> np.ndarray:
 class MetricZVector:
     """Holds raw & z-scored vectors for one ticker (optional debugging use)."""
 
-    raw: Dict[str, float] = field(default_factory=dict)
     zscores: Dict[str, float] = field(default_factory=dict)
 
 @dataclass
@@ -92,62 +113,149 @@ ZScoreDict = Dict[str, ZScoreResult]
 # public API
 # ---------------------------------------------------------------------------
 
-def calc_value_z_scores(stocks: List["Stock"], value_cfg) -> ZScoreDict:  # noqa: F821
+def calc_value_z_scores (stocks: List["Stock"], z_score_weights) -> List["Stock"]:  # noqa: F821
     """Compute composite value z-scores using (Trailing P/E, Forward P/E, EBIT/TEV).
+
+    Because it has a mean value of 0 and standard deviation of 1,
+    the value of z-scores show how many standard deviation a given value lies from the mean.
 
     For the two *P/E* ratios **lower is better**, so we invert them (multiply by
     -1) before computing the z-score to align the direction with 'higher is
     cheaper' logic used by other factors.
     """
     # gather columns
-    tickers, pe_t, pe_f, ebit_tev, pb_ratio = [], [], [], [], []
+    tickers, pe_t_list, pe_f_list, ebit_tev_list, pb_ratio_list = [], [], [], [], []
 
     # TODO: What if EBIT/TEV is negative? Use P/B ratio instead or is EBIT/TEV negative good as long as EBIT is positive?
 
+    # ---------------------------------------------------------------------
+    # 1) Gather raw metrics into aligned lists
+    # ---------------------------------------------------------------------
     # Iterate over all stocks
     for stock in stocks:
 
-        tickers.append(stock.ticker)
-        value_metrics = stock.value_metrics
+        tickers.append (stock.ticker)
 
-        pe_t.append(_nan_safe(getattr(value_metrics, "pe_trailing", np.nan)))
-        pe_f.append(_nan_safe(getattr(value_metrics, "pe_forward", np.nan)))
-        ebit_tev.append(_nan_safe(getattr(value_metrics, "ebit_to_tev", np.nan)))
-        pb_ratio.append(_nan_safe(getattr(value_metrics, "pb_ratio", np.nan)))
+        # Make sure that metrics are added in the same order as the stocks
+        pe_t_list.append(_nan_safe(getattr(stock.value_metrics, "pe_trailing", np.nan)))
+        pe_f_list.append(_nan_safe(getattr(stock.value_metrics, "pe_forward", np.nan)))
+        ebit_tev_list.append(_nan_safe(getattr(stock.value_metrics, "ebit_to_tev", np.nan)))
+        pb_ratio_list.append(_nan_safe(getattr(stock.value_metrics, "pb_ratio", np.nan)))
 
-    # Invert ratios since lower is better for P/E and P/B ratios.
-    pe_t_inv = np.multiply(pe_t, -1)
-    pe_f_inv = np.multiply(pe_f, -1)
-    pb_inv   = np.multiply(pb_ratio, -1)
 
-    z_pe_t   = _zscore(np.array(pe_t_inv))
-    z_pe_f   = _zscore(np.array(pe_f_inv))
-    z_ebit   = _zscore(np.array(ebit_tev))
-    z_pb     = _zscore(np.array(pb_inv))
+    # ---------------------------------------------------------------------
+    # 2) Invert the "lower‑is‑better" ratios (P/E, P/B)
+    # ---------------------------------------------------------------------
+    # Flip sign (multiply by -1) for P/E and P/B ratios so that 'lower is better' metrics become 'higher is better' for z-score ranking.
+    # This is standard in quant finance: it preserves the distribution shape and avoids issues with 1/x (which is non-linear and can create outliers).
+    # After this, higher z-scores always mean 'cheaper' (better) for all value metrics, making them comparable and suitable for composite scoring.
+    # The EBIT/TEV is already "higher-is-better", so it stays unchanged.
+    pe_t_inv = np.multiply (pe_t_list, -1)
+    pe_f_inv = np.multiply (pe_f_list, -1)
+    pb_inv   = np.multiply (pb_ratio_list, -1)
 
-    composite = np.nanmean(np.vstack([z_pe_t, z_pe_f, z_ebit, z_pb]), axis=0)
+    # ---------------------------------------------------------------------
+    # 3) Z‑score each metric (population σ, NaN‑aware)
+    # ---------------------------------------------------------------------
+    # Compute z-scores for each column, i.e. metric
+    # Higher the Z-score, the cheaper the stock is considered.
+    z_pe_t   = calc_zscore (np.array(pe_t_inv))
+    z_pe_f   = calc_zscore (np.array(pe_f_inv))
+    z_ebit   = calc_zscore (np.array(ebit_tev_list))
+    z_pb     = calc_zscore (np.array(pb_inv))
 
-    return {
-        tkr: ZScoreResult(
-            composite=float(composite) if not math.isnan(composite) else np.nan,
-            detail=MetricZVector(
-                raw={
-                    "PE_trailing": pe_t[i],
-                    "PE_forward":  pe_f[i],
-                    "EBIT_to_TEV": ebit_tev[i],
-                    "PB_ratio":    pb_ratio[i],
-                },
-                zscores={
-                    "z_PE_trailing": z_pe_t[i],
-                    "z_PE_forward":  z_pe_f[i],
-                    "z_EBIT_to_TEV": z_ebit[i],
-                    "z_PB_ratio":    z_pb[i],
-                },
-            ),
+
+    # ---------------------------------------------------------------------
+    # 4) Build metric‑by‑stock matrix and apply weights
+    # ---------------------------------------------------------------------
+
+    # Stack z-scores and weights - (4xN) matrix where N is the number of stocks.
+    #   -------------------------------------------------------------
+    #   |  Stock_A  |  Stock_B  |  Stock_C  |  Stock_D  |  Stock_N  |
+    #   |-----------|-----------|-----------|-----------|-----------|
+    #   |  Z_PE_T_a |  Z_PE_T_b |  Z_PE_T_c |  Z_PE_T_d |  Z_PE_T_n |
+    #   |  Z_PE_F_a |  Z_PE_F_b |  Z_PE_F_c |  Z_PE_F_d |  Z_PE_F_n |
+    #   |  Z_EBIT_a |  Z_EBIT_b |  Z_EBIT_c |  Z_EBIT_d |  Z_EBIT_n |
+    #   |  Z_PB_a   |  Z_PB_b   |  Z_PB_c   |  Z_PB_d   |  Z_PB_n   |
+    #   |-----------------------------------------------------------|
+    # Stack the z-scores into a matrix where each row corresponds to a metric and each column corresponds to a stock.
+    z_matrix = np.vstack ([
+        z_pe_t,
+        z_pe_f,
+        z_ebit,
+        z_pb
+    ])
+
+    # weight vector for each metric - (4x1) vector.
+    weight_vector = np.array ([
+        z_score_weights.get ("pe_trailing", 0),
+        z_score_weights.get ("pe_forward", 0),
+        z_score_weights.get ("ebit_to_tev", 0),
+        z_score_weights.get ("pb_ratio", 0)
+    ])
+
+    # ------------- Compute the weighted composite z-score -------------
+
+    # Multiply each metric's z-score by its corresponding weight for every stock.
+    #              (4xN)  ⋅     (4x1)
+    w_z_matrix = z_matrix * weight_vector[:, None]
+
+    # Sum the weighted z-scores of a stock
+    # Sum along the column as each z-score metric (P/E, P/B, etc.) of a stock is stored in columns
+    # ignoring NaNs (so missing metrics don't count as zero).
+    weighted_zscore_sum = np.nansum (w_z_matrix, axis=0)
+
+    # Compute the sum of weights actually present (not NaN) for each stock (column):
+    #   - For each stock, only the weights of metrics that are NOT NaN are included.
+    #   - This ensures the denominator for the weighted average only counts metrics that exist for that stock.
+    #   - Example:
+    #       If weights = [10, 20, 30] and for a stock the 2nd metric is NaN, then weight_sum = 10 + 0 + 30 = 40.
+    #   - This prevents missing data from diluting the composite score.
+    #   - Without adjusting, Stock - who has missing metric - composite is systematically
+    #     suppressed—not because its z-scores are worse, but because it carried less total weight.
+    weight_sum = np.nansum ((~np.isnan(z_matrix)) * weight_vector[:, None], axis=0)
+
+    # For each stock, sums the weights of only those metrics that are not NaN (i.e., available for that stock).
+    weighted_avg_zscore_per_stock = np.divide (
+        weighted_zscore_sum,
+        weight_sum,
+        out=np.full_like ( weighted_zscore_sum, np.nan ),
+        where=weight_sum != 0
+    )
+
+    # ---------------------------------------------------------------------
+    # 5) Assemble return structure
+    # ---------------------------------------------------------------------
+
+    for i in range (len(tickers)):
+
+        ticker = tickers[i]
+
+        # 5a) populate z‑score dict
+        zscore_metrics = {
+            "z_PE_trailing": z_pe_t[i],
+            "z_PE_forward": z_pe_f[i],
+            "z_EBIT_to_TEV": z_ebit[i],
+            "z_PB_ratio": z_pb[i],
+        }
+
+        # 5b) create MetricZVector and ZScoreResult objects
+        metric_z_vector = MetricZVector (
+            zscores=zscore_metrics
         )
-        for i, tkr in enumerate(tickers)
-    }
 
+        zscore_result = ZScoreResult (
+            composite=float(weighted_avg_zscore_per_stock[i]) if not math.isnan(weighted_avg_zscore_per_stock[i]) else np.nan,
+            detail=metric_z_vector,
+        )
+
+        stocks[i].value_z_score_result = zscore_result
+
+    # ---------------------------------------------------------------------
+    # 6) Return
+    # ---------------------------------------------------------------------
+    # TODO: We might not have to return, as the function modifies the input parameter (stock list) itself ?
+    return stocks
 
 
 def calc_profitability_z_scores(stocks: List["Stock"], profitability_cfg : dict) -> ZScoreDict:  # noqa: F821
@@ -190,7 +298,7 @@ def _generic_group_z(stocks: List["Stock"], attr_group: str, fields: List[str]) 
         raw_matrix.append(col)
 
     raw_np = np.array(raw_matrix, dtype=float)
-    z_np   = np.vstack([_zscore(col) for col in raw_np])
+    z_np   = np.vstack([calc_zscore(col) for col in raw_np])
     composite = np.nanmean(z_np, axis=0)
 
     results: ZScoreDict = {}

@@ -22,7 +22,7 @@
     "ValueFactor": {
       "total_weight": 0.50,
       "use_sector_cap": false,
-      "metrics": {
+      "z_score_metrics": {
         "pe_trailing": 0.25,
         "pe_forward": 0.25,
         "ebit_to_tev": 0.50,
@@ -33,7 +33,7 @@
     "ProfitabilityFactor": {
       "total_weight": 0.25,
       "use_sector_cap": false,
-      "metrics": {
+      "z_score_metrics": {
         "gross_profit_assets": 0.2,
         "roe": 0.2,
         "roa": 0.2,
@@ -46,7 +46,7 @@
     "ProfitabilityGrowthFactor": {
       "total_weight": 0.25,
       "use_sector_cap": false,
-      "metrics": {
+      "z_score_metrics": {
         "earnings_growth" : "1/7",
         "earnings_variability" : "1/7",
         "gpoa_ttm" : "1/7",
@@ -64,7 +64,7 @@
     "__TODO__": "Make a Portfolio using Small Cap ex. USA to for tax optimization.",
     "Tickers_and_Weights": [
 
-        {
+       {
           "ticker": "AVGO",
           "weight": 4.11
         },

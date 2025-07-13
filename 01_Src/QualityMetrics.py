@@ -126,18 +126,11 @@ class ProfitabilityMetrics:
         self.earnings = earnings            # Earnings data object containing EPS, Net Income, and growth rates
 
         # Profitability metrics as described in Asness, Frazzini, and Pedersen (2014)
-        self.gpoa_ttm = gpoa            # Gross profits over assets (GPOA) as TTM ++
-        self.gpmar_ttm = gpmar          # Gross Profit margin (GPMAR)       +
-        self.roe_ttm = roe              # Return on equity (ROE) as TTM          +
-        self.roa_ttm = roa              # Return on assets (ROA) as TTM           +
-
-        # Cash Flow over Assets (CFOA) last year
-        if cfoa:
-            self.cfoa = cfoa[0]        # Cash Flow over Assets (CFOA) last year
-        else:
-            self.cfoa = None
-
-
+        self.gpoa = gpoa            # Gross profits over assets (GPOA)
+        self.gpmar = gpmar          # Gross Profit margin (GPMAR)
+        self.roe = roe              # Return on equity (ROE)
+        self.roa = roa              # Return on assets (ROA)
+        self.cfoa = cfoa            # Cash Flow over Assets (CFOA)
 
         self.accruals = accruals    # Accruals (ACC)
 
